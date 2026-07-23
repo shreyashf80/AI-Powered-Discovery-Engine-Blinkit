@@ -26,17 +26,17 @@
 | Task | Details |
 |---|---|
 | Initialize `backend/` | Python project structure per [architecture.md §7](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/docs/architecture.md#L462) — create all `__init__.py` files, empty module directories |
-| `backend/requirements.txt` | `fastapi`, `uvicorn`, `bascraper`, `google-play-scraper`, `langdetect`, `chromadb`, `sentence-transformers`, `groq`, `google-genai`, `pydantic`, `beautifulsoup4`, `requests`, `aiohttp`, `google-api-python-client` |
+| `backend/requirements.txt` | `fastapi`, `uvicorn`, `bascraper`, `google-play-scraper`, `langdetect`, `chromadb`, `sentence-transformers`, `groq`, `google-genai`, `pydantic`, `beautifulsoup4`, `requests`, `aiohttp`, `google-api-python-client`, `numpy<2` |
 | `backend/.env.example` | `GROQ_API_KEY`, `GEMINI_API_KEY`, `ADMIN_SECRET`, `YOUTUBE_API_KEY`, `DATA_DIR=/data` (no Reddit credentials needed — Arctic Shift and PullPush are keyless) |
 | Initialize `frontend/` | `npx -y create-next-app@latest ./frontend` — TypeScript + TailwindCSS + App Router |
 | `backend/Dockerfile` | Python 3.11 slim, pip install, uvicorn entrypoint |
 | `backend/railway.toml` | Volume mount at `/data`, build/start commands |
 
 ### Exit Criteria
-- [ ] All 6 API keys/credentials obtained and tested
-- [ ] `backend/` and `frontend/` directories scaffolded
-- [ ] `pip install -r requirements.txt` succeeds
-- [ ] `frontend/` dev server starts with `npm run dev`
+- [x] All 6 API keys/credentials obtained and tested
+- [x] `backend/` and `frontend/` directories scaffolded
+- [x] `pip install -r requirements.txt` succeeds
+- [x] `frontend/` dev server starts with `npm run dev`
 
 ---
 
@@ -50,7 +50,7 @@
 #### [NEW] [config.py](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/backend/src/shared/config.py)
 - Pydantic `BaseSettings` loading from environment / `.env`
 - Paths: `DATA_DIR`, `CHROMA_DIR`, `SQLITE_PATH`
-- API keys: `GROQ_API_KEY`, `GEMINI_API_KEY`, `ADMIN_SECRET`, `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `YOUTUBE_API_KEY`
+- API keys: `GROQ_API_KEY`, `GEMINI_API_KEY`, `ADMIN_SECRET`, `YOUTUBE_API_KEY`
 
 ### 1.2 Data Schemas
 
@@ -88,10 +88,10 @@
 - Logging of which provider handled each call
 
 ### Exit Criteria
-- [ ] `config.py` loads env vars successfully
-- [ ] `schemas.py` models can serialize/deserialize sample data
-- [ ] `db.py` creates SQLite tables and round-trips a test row
-- [ ] `llm.py` makes a test call to Groq and falls back to Gemini on simulated failure
+- [x] `config.py` loads env vars successfully
+- [x] `schemas.py` models can serialize/deserialize sample data
+- [x] `db.py` creates SQLite tables and round-trips a test row
+- [x] `llm.py` makes a test call to Groq and falls back to Gemini on simulated failure
 
 ---
 
@@ -167,15 +167,15 @@ Per [architecture.md §4.2](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/
 |---|---|---|
 | Dedup | `deduplicate(items)` | SHA-256 of normalized body; drop cross-source dupes |
 | Language | `detect_language(item)` | `langdetect` → sets `language_detected`, preserves original |
-| Translate | `translate_if_needed(item, llm)` | Hinglish/code-mixed → normalize via LLM; preserve original |
+| Translate | `translate_if_needed(item)` | Hinglish/code-mixed → translate via `deep-translator` (Google Translate); zero LLM cost |
 | Spam | `filter_spam(items)` | Drop bot signatures, promo links, repetitive patterns |
 
 ### Exit Criteria
-- [ ] Each connector fetches ≥20 items from its source successfully
-- [ ] `RawItem` schema validates for all connector outputs
-- [ ] Dedup correctly catches a synthetically duplicated item
-- [ ] Language detection identifies at least one non-English item
-- [ ] Spam filter drops a synthetic promo-link item
+- [x] Each connector fetches ≥20 items from its source successfully
+- [x] `RawItem` schema validates for all connector outputs
+- [x] Dedup correctly catches a synthetically duplicated item
+- [x] Language detection identifies at least one non-English item
+- [x] Spam filter drops a synthetic promo-link item
 
 ---
 
@@ -190,23 +190,23 @@ Per [architecture.md §4.3](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/
 
 - `apply_stage1_filter(items) -> (survivors: list, discard_count: int)`
 - Rules:
-  1. `len(body) < 25` AND no category keyword → **discard**
-  2. Body matches ONLY `APP_TECHNICAL_VOCAB` AND zero `BEHAVIOR_SIGNAL_WORDS` → **discard**
-  3. Delivery complaint + category mention → **pass through** (legitimate `barrier_type`)
-  4. Everything else → **pass through**
+  1. Absolute Junk & Spam: Drop emojis, len < 5, and social/B2B spam ("subscribe", "hiring", etc.).
+  2. Technical Noise: Drop items with app-technical vocab ("crash", "otp") AND no behavior/trust signals.
+  3. Short-Text Trap: Drop `len(body) < 25` UNLESS it contains a Canonical Category or Pain/Behavior Keyword.
+  4. Ambiguity Pass-Through: Pass everything else >25 chars to the LLM (let LLM return `relevant: false`).
 
 ### 3.2 LLM Extraction (Stage 2)
 
 #### [NEW] [extractor.py](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/backend/src/pipeline/extractor.py)
 Per [architecture.md §4.4](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/docs/architecture.md#L281-L324):
 
-- `async extract_item(item, llm) -> TaggedItem | None`
-  - System + user prompt built from [PRD §5 taxonomy](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/docs/blinkit-discovery-engine-prd.md#L61-L81)
-  - Parses JSON → `TaggedItem` via Pydantic
-  - Returns `None` for `relevant: false` (increments funnel counter)
-- `async extract_batch(items, llm, concurrency=5) -> list[TaggedItem]`
-  - Concurrent with rate-limit-aware semaphore
-  - Logs Groq vs. Gemini usage breakdown
+- `async process_batch(batch, llm) -> list[TaggedItem]`
+  - Gemini 2.0 Flash as **primary LLM** (1,000,000 TPM limit perfectly suits batching). Groq is fallback.
+  - Bundles 25 items into a single JSON array per prompt to avoid daily request limits.
+  - Returns `None` for items LLM deems `relevant: false` (increments funnel counter).
+- `async extract_all(items, llm) -> list[TaggedItem]`
+  - Runs batches of 25 items with an explicit 4-second delay (`asyncio.sleep`) to strictly obey Gemini's 15 RPM limit.
+  - Outputs perfectly structured list of `TaggedItem` Pydantic models.
 
 ### 3.3 Embedding
 
@@ -214,7 +214,7 @@ Per [architecture.md §4.4](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/
 Per [architecture.md §4.5](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/docs/architecture.md#L326-L333):
 
 - `embed_and_store(items: list[TaggedItem], chroma_client) -> int`
-- Loads `all-MiniLM-L6-v2`
+- Loads `BAAI/bge-small-en-v1.5`
 - Embeds `source_snippet` field (not full body)
 - Stores in ChromaDB with all taxonomy metadata
 - Returns count embedded
@@ -248,20 +248,20 @@ Per [architecture.md §4.5](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/
 > [!IMPORTANT]
 > Do NOT scale to full volume until all checks pass:
 
-- [ ] Canonical categories firing correctly ("milk" → "Dairy & Bakery", not free-text)
-- [ ] `relevant: true/false` making sensible decisions
-- [ ] Delivery complaints with category mentions are kept (not filtered)
-- [ ] JSON output is valid and parseable by Pydantic
-- [ ] Groq primary / Gemini fallback working
-- [ ] Cross-source deduplication catching duplicates
-- [ ] Sample of *discarded* items reviewed — filter isn't cutting real signal
+- [x] Canonical categories firing correctly ("milk" → "Dairy & Bakery", not free-text)
+- [x] `relevant: true/false` making sensible decisions
+- [x] Delivery complaints with category mentions are kept (not filtered)
+- [x] JSON output is valid and parseable by Pydantic
+- [x] Groq primary / Gemini fallback working
+- [x] Cross-source deduplication catching duplicates
+- [x] Sample of *discarded* items reviewed — filter isn't cutting real signal
 
 ### Exit Criteria
-- [ ] Dry-run passes all 7 checks above
-- [ ] Full-scale pipeline runs successfully (500-1000 items/source)
-- [ ] `pipeline_stats` table has accurate funnel counts per source
-- [ ] ChromaDB contains ~1,500+ embedded items
-- [ ] Irrelevant raw items have been purged from SQLite
+- [x] Dry-run passes all 7 checks above
+- [x] Full-scale pipeline runs successfully (500-1000 items/source)
+- [x] `pipeline_stats` table has accurate funnel counts per source
+- [x] ChromaDB contains ~1,500+ embedded items
+- [x] Irrelevant raw items have been purged from SQLite
 
 ---
 
@@ -315,13 +315,15 @@ Per [architecture.md §4.6](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/
 
 #### [NEW] [routes/admin.py](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/backend/src/api/routes/admin.py)
 - `POST /api/admin/ingest` — secured with `ADMIN_SECRET` bearer token
+- Accepts payload `{"mode": "demo" | "full"}` to control ingestion volume (fast demo vs complete dataset)
 - Triggers pipeline as background task
 - Returns `run_id` + status
+- `GET /api/admin/ingest/status` — returns current job status and progress
 
 ### Exit Criteria
-- [ ] `POST /api/chat` returns a valid answer with citations for a test question
-- [ ] `GET /api/stats` returns accurate funnel numbers
-- [ ] `POST /api/admin/ingest` triggers pipeline and returns `run_id`
+- [x] `POST /api/chat` returns a valid answer with citations for a test question
+- [x] `GET /api/stats` returns accurate funnel numbers
+- [x] `POST /api/admin/ingest` triggers pipeline and returns `run_id`
 - [ ] Retrieval returns topically relevant results (manual spot-check of 5 queries)
 - [ ] Synthesis cites specific snippets with source names
 
@@ -336,10 +338,18 @@ Per [architecture.md §4.6](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/
 
 #### [NEW] [page.tsx](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/frontend/src/app/page.tsx)
 - Main chat page:
+  - Embeds `IngestionControl` into top navigation or actionable dashboard banner
   - Question input (text area + send button)
   - Answer display with formatted citations
   - Per-source breakdown badges
   - Loading skeleton animations
+
+#### [NEW] [IngestionControl.tsx](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/frontend/src/components/IngestionControl.tsx)
+- Premium UI panel for Data Ingestion with two mode buttons:
+  - 🚀 **Quick Demo Run**: Fetches a small sample (25 items per source) for fast testing
+  - ⚡ **Full Pipeline Run**: Complete dataset ingestion
+- Live status badge, progress indicator bar, and completed metrics
+- Disables triggers while ingestion is active and displays toast/status feedback
 
 #### [NEW] [ChatMessage.tsx](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/frontend/src/components/ChatMessage.tsx)
 - Renders a single Q&A pair
@@ -362,7 +372,7 @@ Per [architecture.md §4.6](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/
 
 1. Push `backend/` to Railway
 2. Attach persistent volume mounted at `/data`
-3. Set env vars: `GROQ_API_KEY`, `GEMINI_API_KEY`, `ADMIN_SECRET`, `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `YOUTUBE_API_KEY`
+3. Set env vars: `GROQ_API_KEY`, `GEMINI_API_KEY`, `ADMIN_SECRET`, `YOUTUBE_API_KEY`
 4. Verify: `curl https://<railway-url>/api/stats` returns valid JSON
 
 ### 5.3 Vercel Deployment (Frontend)
@@ -373,11 +383,11 @@ Per [architecture.md §4.6](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/
 
 ### 5.4 End-to-End Validation
 
-- [ ] Trigger ingest via `POST /api/admin/ingest` (dry-run first, then full)
+- [x] Trigger ingest via `POST /api/admin/ingest` (dry-run first, then full)
 - [ ] Full pipeline runs on Railway with persistent volume
 - [ ] Ask all 8 seed questions through the chat UI on Vercel
 - [ ] Citations are correct and link to real sources
-- [ ] `/api/stats` shows accurate funnel numbers
+- [x] `/api/stats` shows accurate funnel numbers
 
 ### Exit Criteria
 - [ ] Chat UI is live on Vercel and fully functional

@@ -38,6 +38,7 @@ Build a working system that can answer, with citations to real user-generated te
 **In scope — Tier 1 (must-ship):**
 - App Store reviews, Play Store reviews, Reddit discussions (including broadened quick-commerce queries), and YouTube comments on Blinkit-related videos — all fast to build via existing free libraries/APIs
 - Full pipeline against Tier 1 sources: extraction, RAG chat, insight summary
+- Dual data ingestion modes accessible from the UI: a fast "Demo" mode fetching small samples for quick validation, and a "Full Pipeline" mode.
 - A RAG-based chat interface where a stakeholder can ask natural-language questions and get answers grounded in cited source snippets
 - A byproduct insight summary answering the 8 seed questions directly
 
@@ -166,7 +167,7 @@ The system is split across two free-tier platforms:
 | FR6 | System detects non-English content (notably Hinglish/code-mixed and regional-language text) and normalizes/translates it before taxonomy tagging, rather than silently dropping or mis-tagging it |
 | FR7 | Every ingested item is tagged against the Section 5 taxonomy via LLM extraction, stored as structured JSON, using the canonical category list (not free-text categories) |
 | FR7a | Before embedding, every item passes through the Relevance Filter (Section 7a): a free rule-based Stage 1, then a single extraction call that tags the item *and* sets `relevant: true/false`. Only `relevant: true` items are embedded; raw text and tags for `relevant: false` items are retained but not embedded |
-| FR7b | The entire pipeline (ingestion, cleaning, filter, extraction, embedding, and RAG Chat) is deployed to Railway. Ingestion is triggered via a scheduled job or admin endpoint, and vector store data is persisted on a cloud volume |
+| FR7b | The entire pipeline (ingestion, cleaning, filter, extraction, embedding, and RAG Chat) is deployed to Railway. Ingestion is triggered via a scheduled job or an admin endpoint supporting dual modes (demo vs full), and vector store data is persisted on a cloud volume |
 | FR8 | Tagged items are embedded and stored in a vector database for semantic retrieval |
 | FR9 | A chat interface accepts natural-language questions and returns an answer synthesized from retrieved items, with citations tagged by source |
 | FR10 | Every chat answer includes citations/links back to the specific source snippets used, tagged with which source it came from |
@@ -200,7 +201,7 @@ The system is split across two free-tier platforms:
 ## 11. Build Plan (mapped to Antigravity specs — 2-3 days, stretchable if needed)
 
 **Day 0 — Account/API setup (before any coding starts)**
-Register the Reddit developer app and get API credentials, and get a YouTube Data API key. Do this first and separately from coding time — approval/verification can have unpredictable delay outside your control, and it shouldn't sit on the critical path once building begins.
+Get a YouTube Data API key. Do this first and separately from coding time — approval/verification can have unpredictable delay outside your control. (Reddit API registration is no longer required as we use keyless community mirrors).
 
 **Day 1 — Tier 1 ingestion + extraction**
 1. **Spec A1 — Core Ingestion:** connectors for Play Store, App Store, Reddit (merged brand + broadened queries, deduped), YouTube comments; raw storage schema with per-source metadata

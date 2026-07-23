@@ -1,26 +1,67 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-bg: var(--color-bg-val);
+  --color-surface: var(--color-surface-val);
+  --color-ink: var(--color-ink-val);
+  --color-ink-muted: var(--color-ink-muted-val);
+  --color-accent: var(--color-accent-val);
+  --color-accent-ink: var(--color-accent-ink-val);
+  --color-positive: var(--color-positive-val);
+  --color-negative: var(--color-negative-val);
+  
+  --color-source-play: var(--color-source-play-val);
+  --color-source-app: var(--color-source-app-val);
+  --color-source-reddit: var(--color-source-reddit-val);
+  --color-source-youtube: var(--color-source-youtube-val);
+
+  --font-sans: var(--font-ibm-sans);
+  --font-mono: var(--font-ibm-mono);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --color-bg-val: #FAFAF7;
+    --color-surface-val: #FFFFFF;
+    --color-ink-val: #191D1A;
+    --color-ink-muted-val: #6B7069;
+    --color-accent-val: #F8CB46;
+    --color-accent-ink-val: #191D1A;
+    --color-positive-val: #2E7D4F;
+    --color-negative-val: #C4442A;
+    --color-source-play-val: #2E7D4F;
+    --color-source-app-val: #4A6FA5;
+    --color-source-reddit-val: #C4562A;
+    --color-source-youtube-val: #B03A3A;
+  }
+
+  .dark {
+    --color-bg-val: #121413;
+    --color-surface-val: #1E211F;
+    --color-ink-val: #F2F4F2;
+    --color-ink-muted-val: #9BA39D;
+    --color-accent-val: #F8CB46;
+    --color-accent-ink-val: #121413;
+    --color-positive-val: #43A047;
+    --color-negative-val: #E53935;
+    --color-source-play-val: #43A047;
+    --color-source-app-val: #6A96DE;
+    --color-source-reddit-val: #E55B25;
+    --color-source-youtube-val: #DE4C4C;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes progress-stripes {
+  0% { background-position: 1rem 0; }
+  100% { background-position: 0 0; }
+}
+
+@utility animate-stripes {
+  animation: progress-stripes 1s linear infinite;
 }

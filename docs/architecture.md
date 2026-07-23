@@ -46,7 +46,7 @@ The Discovery Engine is a **batch-ingest, RAG-powered research tool** that trans
 │  │                        2. CLEANING LAYER                                  │   │
 │  │   • Deduplication (content-hash + source-ID)                              │   │
 │  │   • Language detection (langdetect / lingua)                              │   │
-│  │   • Hinglish / code-mixed normalization + translation                     │   │
+│  │   • Hinglish / code-mixed normalization + translation via deep-translator  │   │
 │  │   • Spam / bot-pattern filter                                             │   │
 │  └──────────────────────────────────┬────────────────────────────────────────┘   │
 │                                     │                                            │
@@ -62,14 +62,14 @@ The Discovery Engine is a **batch-ingest, RAG-powered research tool** that trans
 │  │   └──────────────────────────┬──────────────────────────────────────┘     │   │
 │  │                              │                                            │   │
 │  │   Stage 2 — LLM extraction (merged with Extraction Layer below)          │   │
-│  │   • Single Groq/Gemini call: taxonomy tags + `relevant: true/false`      │   │
+│  │   • Batch Gemini call (fallback: Groq): tags + `relevant: true/false`    │   │
 │  └──────────────────────────────┬────────────────────────────────────────────┘   │
 │                                 │                                                │
 │  ┌──────────────────────────────▼────────────────────────────────────────────┐   │
 │  │                       4. EXTRACTION LAYER                                 │   │
 │  │                                                                           │   │
-│  │   • One LLM call per item (Groq primary, Gemini fallback)                 │   │
-│  │   • Output: structured JSON per item (taxonomy + relevant flag)           │   │
+│  │   • Batch LLM call (25 items/prompt) (Gemini primary, Groq fallback)      │   │
+│  │   • Output: structured JSON array (taxonomy + relevant flag)              │   │
 │  │   • Items tagged `relevant: false` → increment funnel counter, then purge │   │
 │  │   • Items tagged `relevant: true` → persist to Tagged Store               │   │
 │  └──────────────────────────────┬────────────────────────────────────────────┘   │
@@ -78,7 +78,7 @@ The Discovery Engine is a **batch-ingest, RAG-powered research tool** that trans
 │  │                       5. EMBEDDING & VECTOR STORE                         │   │
 │  │                                                                           │   │
 │  │   • Only `relevant: true` items are embedded                              │   │
-│  │   • Embedding model: sentence-transformers (all-MiniLM-L6-v2)            │   │
+│  │   • Embedding model: sentence-transformers (BAAI/bge-small-en-v1.5)      │   │
 │  │   • Vector DB: ChromaDB (persistent mode, Railway Volume)                 │   │
 │  │   • Metadata stored alongside vectors for filtered retrieval              │   │
 │  └──────────────────────────────┬────────────────────────────────────────────┘   │
@@ -179,7 +179,7 @@ Tracks per-source, per-run counts for transparency reporting (FR12) without keep
 
 ```json
 {
-  "run_id": "string",
+  "run_id": "string (format: {run_id}_{source})",
   "source": "string",
   "run_timestamp": "ISO 8601",
   "raw_ingested": 1200,
@@ -327,7 +327,7 @@ User:   <item body>
 
 | Aspect | Choice | Rationale |
 |---|---|---|
-| Embedding model | `all-MiniLM-L6-v2` (sentence-transformers) | Fast, free, good semantic quality for short text |
+| Embedding model | `BAAI/bge-small-en-v1.5` (sentence-transformers) | Fast, free, top semantic quality for short text |
 | Vector DB | ChromaDB (persistent mode, Railway Volume) | Simple, file-based, survives redeploys |
 | What gets embedded | `source_snippet` field (the excerpt, not full body) | Tighter semantic match |
 | Metadata | All taxonomy tags + source info stored as Chroma metadata | Enables filtered retrieval at query time |
@@ -375,6 +375,7 @@ User question (from Vercel frontend)
 
 A standalone frontend deployed on Vercel, consuming the Railway FastAPI backend:
 
+- **Data Ingestion Control Panel:** UI element with two buttons for triggering ingestion modes (`Demo` vs `Full Pipeline`) with live status feedback.
 - **Input:** natural-language question text box
 - **Output:** formatted answer with:
   - Inline citations linking to source snippets
@@ -540,7 +541,8 @@ NL Grad Project/
 │   │   ├── components/
 │   │   │   ├── ChatMessage.tsx
 │   │   │   ├── CitationBadge.tsx
-│   │   │   └── FunnelStats.tsx
+│   │   │   ├── FunnelStats.tsx
+│   │   │   └── IngestionControl.tsx        # UI panel for triggering ingestion
 │   ├── next.config.mjs
 │   ├── tailwind.config.ts
 │   ├── tsconfig.json
@@ -560,7 +562,7 @@ NL Grad Project/
 | Web framework | FastAPI | + Uvicorn |
 | LLM — primary | Groq API | Llama 3.3 70B (free tier: 30 RPM, 14,400 req/day) |
 | LLM — fallback | Google Gemini API | Gemini 2.0 Flash (free tier: 15 RPM, 1M TPM) |
-| Embedding | sentence-transformers (`all-MiniLM-L6-v2`) | Free, local, ~80MB model |
+| Embedding | sentence-transformers (`BAAI/bge-small-en-v1.5`) | Free, local, ~133MB model |
 | Vector DB | ChromaDB | Persistent mode on Railway Volume |
 | Data store | SQLite | Lightweight, single-file, on Railway Volume |
 | App Store scraping | `app-store-scraper` | npm package (subprocess or Python port) |
@@ -712,13 +714,13 @@ flowchart TD
 
 ### 10.4 `POST /api/admin/ingest`
 
-Triggers a full pipeline run. Secured with a shared secret.
+Triggers a pipeline run (either quick demo or full scale). Secured with a shared secret.
 
 **Request:**
 ```json
 {
-  "sources": ["play_store", "app_store", "reddit", "youtube"],
-  "dry_run": false
+  "mode": "demo",
+  "sources": ["play_store", "app_store", "reddit", "youtube"]
 }
 ```
 
@@ -730,6 +732,24 @@ Triggers a full pipeline run. Secured with a shared secret.
   "status": "started",
   "run_id": "run_20260719_0830",
   "message": "Pipeline started as background task"
+}
+```
+
+### 10.5 `GET /api/admin/ingest/status`
+
+Returns current status and progress for the active pipeline run, including persistent logs and start timestamp.
+
+**Response:**
+```json
+{
+  "status": "running",
+  "run_id": "run_20260719_0830",
+  "message": "Embedding items into ChromaDB...",
+  "start_time": 1721389800.5,
+  "logs": [
+    {"time": "14:30:00", "text": "Fetching from play_store..."},
+    {"time": "14:31:12", "text": "Filtering play_store items..."}
+  ]
 }
 ```
 
