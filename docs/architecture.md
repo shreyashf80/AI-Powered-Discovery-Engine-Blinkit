@@ -229,7 +229,7 @@ class BaseConnector(ABC):
 | `AppStoreConnector` | `app-store-scraper` / RSS feeds | `app_store:{review_id}` | 12-18 months | Free, no auth |
 | `PlayStoreConnector` | `google-play-scraper` | `play_store:{review_id}` | 12-18 months | Free, no auth |
 | `RedditConnector` | Arctic Shift (subreddit-scoped) + PullPush (Reddit-wide) — community-maintained Reddit data mirrors; no API key required. Consider using [BAScraper](https://github.com/maxjo020418/BAScraper) wrapper (async, wraps both services). | `reddit:{post_or_comment_id}` | 12-18 months | Single connector, two query sets, two upstream services with mutual fallback. Arctic Shift for subreddit-scoped queries (`/api/posts/search?subreddit=...&title=...&after=...`); PullPush for Reddit-wide text search. Both are volunteer-run with no uptime guarantee — see §14 risk table. |
-| `YouTubeConnector` | YouTube Data API v3 (free quota) | `youtube:{comment_id}` | 12-18 months | Free quota; Blinkit-related videos/reviews |
+| `YouTubeConnector` | YouTube Data API v3 (free quota) | `youtube:{comment_id}` | 12-18 months | Free quota; Intent-based searches for Blinkit-related videos and high-signal comment filtering |
 | `ForumConnector` *(Tier 2)* | Per-forum scraping (BS4) | `forum:{forum_name}:{post_id}` | 12-18 months | Best-effort |
 
 ### 4.2 Cleaning Layer

@@ -72,17 +72,27 @@ class RedditConnector(BaseConnector):
     async def fetch_subreddit_scoped(self, query: str, subreddits: List[str]) -> List[Dict]:
         """Primary: Arctic Shift. Fallback: PullPush."""
         results = []
-        for sub in subreddits:
-            try:
-                posts = await self._fetch_arctic_shift(query=query, subreddit=sub)
-                results.extend(posts)
-            except (httpx.HTTPStatusError, httpx.RequestError) as e:
-                logger.warning(f"Arctic Shift failed for r/{sub} '{query}' ({e}). Falling back to PullPush.")
+        
+        sem = asyncio.Semaphore(5)
+        
+        async def _fetch_sub(sub: str):
+            async with sem:
+                await asyncio.sleep(1.0) # Throttle to prevent 429
                 try:
-                    posts = await self._fetch_pullpush(query=query, subreddit=sub)
-                    results.extend(posts)
-                except Exception as fallback_e:
-                    logger.error(f"PullPush fallback also failed for r/{sub} '{query}': {fallback_e}")
+                    return await self._fetch_arctic_shift(query=query, subreddit=sub)
+                except (httpx.HTTPStatusError, httpx.RequestError) as e:
+                    logger.warning(f"Arctic Shift failed for r/{sub} '{query}' ({e}). Falling back to PullPush.")
+                    try:
+                        return await self._fetch_pullpush(query=query, subreddit=sub)
+                    except Exception as fallback_e:
+                        logger.error(f"PullPush fallback also failed for r/{sub} '{query}': {fallback_e}")
+                        return []
+
+        tasks = [_fetch_sub(sub) for sub in subreddits]
+        sub_results = await asyncio.gather(*tasks)
+        for sub_res in sub_results:
+            results.extend(sub_res)
+            
         return results
 
     async def fetch_reddit_wide(self, query: str) -> List[Dict]:
@@ -123,7 +133,7 @@ class RedditConnector(BaseConnector):
             ingested_at=datetime.datetime.now(datetime.timezone.utc).isoformat()
         )
 
-    def _process_items(self, items: List[Dict], query: str, content_type: str, raw_items_map: Dict[str, RawItem]):
+    def _process_items(self, items: List[Dict], intent: str, query: str, content_type: str, raw_items_map: Dict[str, RawItem]):
         """Filter out deleted/empty bodies, normalize, and merge query tags for deduplication."""
         for p in items:
             body = p.get("selftext") or p.get("body") or ""
@@ -139,39 +149,107 @@ class RedditConnector(BaseConnector):
                 
             item = self.normalize_item(p, query, content_type)
             
-            # Deduplication: If already exists, append the new query tag
+            # Deduplication: If already exists, append the new query tags
             if item.id in raw_items_map:
+                if intent not in raw_items_map[item.id].query_tags:
+                    raw_items_map[item.id].query_tags.append(intent)
                 if query not in raw_items_map[item.id].query_tags:
                     raw_items_map[item.id].query_tags.append(query)
             else:
+                # Replace the original [query] with [intent, query]
+                item.query_tags = [intent, query]
                 raw_items_map[item.id] = item
 
+    def get_intent_queries(self, config: Any) -> Dict[str, List[str]]:
+        intent_queries = getattr(config, "reddit_intent_queries", {})
+        if not intent_queries:
+            intent_queries = {
+                "repeat_purchase": [
+                    "I always order from Blinkit",
+                    "using Blinkit everyday",
+                    "buy groceries on Blinkit every week",
+                    "why I use Blinkit",
+                    "regular Blinkit customer"
+                ],
+                "frustrations": [
+                    "Blinkit experience",
+                    "Blinkit review",
+                    "Blinkit issue",
+                    "Blinkit problem",
+                    "bad Blinkit",
+                    "good Blinkit"
+                ],
+                "switching_behavior": [
+                    "switched to Blinkit",
+                    "Blinkit vs Zepto",
+                    "Blinkit vs Instamart",
+                    "stopped using Blinkit"
+                ],
+                "product_discovery": [
+                    "discovered on Blinkit",
+                    "found on Blinkit",
+                    "recommendation Blinkit",
+                    "impulse purchase Blinkit",
+                    "first time ordered"
+                ],
+                "category_exploration": [
+                    "tried new category Blinkit",
+                    "never bought on Blinkit before",
+                    "Blinkit electronics",
+                    "Blinkit print",
+                    "Blinkit beauty"
+                ]
+            }
+        return intent_queries
+
+    def get_default_subreddits(self, config: Any) -> List[str]:
+        subreddits = getattr(config, "reddit_subreddits", [])
+        if not subreddits:
+            subreddits = [
+                "blinkit", "AskIndia", "india", "IndiaTech", "bangalore", 
+                "delhi", "mumbai", "pune", "hyderabad", "gurgaon", 
+                "noida", "zomato", "swiggy", "zepto", "IndianStreetBets"
+            ]
+        return subreddits
+
     async def fetch(self, config: Any) -> List[RawItem]:
-        # Config structure expected: reddit_queries_scoped, reddit_queries_wide, reddit_subreddits
-        branded = getattr(config, "reddit_queries_scoped", ["blinkit", "blinkit app", "blinkit delivery"])
-        broadened = getattr(config, "reddit_queries_wide", ["quick commerce india", "zepto vs blinkit"])
-        subreddits = getattr(config, "reddit_subreddits", ["india", "bangalore", "mumbai", "developersIndia"])
+        intent_queries = self.get_intent_queries(config)
+        subreddits = self.get_default_subreddits(config)
         
+        # Enforce demo mode limits if reddit_count is small
+        reddit_count = getattr(config, "reddit_count", 10000)
+        is_demo = reddit_count <= 25
+        if is_demo:
+            logger.info("Demo mode detected for Reddit. Will stop fetching early after reaching limit to ensure speed.")
+            
         raw_items_map = {} # reddit_id -> RawItem
+        semaphore = asyncio.Semaphore(5) # Allow 5 concurrent intent+query pairs
+        
+        async def fetch_and_process(intent: str, query: str):
+            if is_demo and len(raw_items_map) >= reddit_count:
+                return
+            async with semaphore:
+                if is_demo and len(raw_items_map) >= reddit_count:
+                    return
+                try:
+                    # 1. Fetch Posts (Subreddit-scoped)
+                    posts = await self.fetch_subreddit_scoped(query, subreddits)
+                    self._process_items(posts, intent, query, "post", raw_items_map)
+                    
+                    # 2. Fetch Comments (Reddit-wide)
+                    await asyncio.sleep(1.0) # Throttle to prevent 429
+                    comments = await self._fetch_pullpush(query, is_comment=True)
+                    self._process_items(comments, intent, query, "comment", raw_items_map)
+                except Exception as e:
+                    logger.error(f"Error fetching for intent '{intent}' query '{query}': {e}")
 
-        # 1. Subreddit-scoped (Branded queries)
-        for query in branded:
-            posts = await self.fetch_subreddit_scoped(query, subreddits)
-            self._process_items(posts, query, "post", raw_items_map)
-
-        # 2. Reddit-wide (Broadened queries)
-        for query in broadened:
-            posts = await self.fetch_reddit_wide(query)
-            self._process_items(posts, query, "post", raw_items_map)
-
-        # 3. Comments (Using PullPush primary)
-        all_queries = branded + broadened
-        for query in all_queries:
-            try:
-                comments = await self._fetch_pullpush(query, is_comment=True)
-                self._process_items(comments, query, "comment", raw_items_map)
-            except Exception as e:
-                logger.error(f"Failed to fetch comments for '{query}': {e}")
+        tasks = []
+        for intent, queries in intent_queries.items():
+            for query in queries:
+                tasks.append(fetch_and_process(intent, query))
+                
+        # Run all fetches concurrently with semaphore throttling
+        await asyncio.gather(*tasks)
 
         await self.client.aclose()
         return list(raw_items_map.values())

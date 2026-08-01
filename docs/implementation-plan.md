@@ -153,8 +153,10 @@ Build all Tier 1 connectors following the `BaseConnector` interface from [archit
 
 #### [NEW] [youtube.py](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/backend/src/connectors/youtube.py)
 - Library: `google-api-python-client` (YouTube Data API v3)
-- Searches for Blinkit-related videos (reviews, comparisons, delivery)
-- Fetches comment threads on matching videos
+- Intent-Based Search: Uses 12 targeted queries grouped by 5 consumer intents (`youtube_intent_queries`) rather than generic reviews.
+- High-Signal Filtering: Discards any comment under 50 characters or 10 words to eliminate noise.
+- Deep Fetching: Grabs up to 100 comments per video.
+- Preserved Metadata: Injects parent intent and exact query into `query_tags`.
 - Dedup key: `youtube:{comment_id}`
 - Respects 10,000 units/day quota
 
@@ -315,7 +317,8 @@ Per [architecture.md §4.6](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/
 
 #### [NEW] [routes/admin.py](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/backend/src/api/routes/admin.py)
 - `POST /api/admin/ingest` — secured with `ADMIN_SECRET` bearer token
-- Accepts payload `{"mode": "demo" | "full"}` to control ingestion volume (fast demo vs complete dataset)
+- Accepts payload `{"mode": "demo" | "full"}` to control ingestion volume. Demo is capped at exactly 25 items per source. Full mode is capped at 400 items per source (and 250 for App Store to protect SerpApi quota).
+- Connectors (Reddit, YouTube) truncate their scope in demo mode to ensure sub-minute execution.
 - Triggers pipeline as background task
 - Returns `run_id` + status
 - `GET /api/admin/ingest/status` — returns current job status and progress
@@ -368,32 +371,10 @@ Per [architecture.md §4.6](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/
 - API client: `fetchChat()`, `fetchSummary()`, `fetchStats()`
 - Base URL via `NEXT_PUBLIC_API_URL` env var → Railway backend
 
-### 5.2 Railway Deployment (Backend)
-
-1. Push `backend/` to Railway
-2. Attach persistent volume mounted at `/data`
-3. Set env vars: `GROQ_API_KEY`, `GEMINI_API_KEY`, `ADMIN_SECRET`, `YOUTUBE_API_KEY`
-4. Verify: `curl https://<railway-url>/api/stats` returns valid JSON
-
-### 5.3 Vercel Deployment (Frontend)
-
-1. Push `frontend/` to Vercel
-2. Set env var: `NEXT_PUBLIC_API_URL=https://<railway-url>`
-3. Verify: frontend loads, chat connects to Railway backend
-
-### 5.4 End-to-End Validation
-
-- [x] Trigger ingest via `POST /api/admin/ingest` (dry-run first, then full)
-- [ ] Full pipeline runs on Railway with persistent volume
-- [ ] Ask all 8 seed questions through the chat UI on Vercel
-- [ ] Citations are correct and link to real sources
-- [x] `/api/stats` shows accurate funnel numbers
-
 ### Exit Criteria
-- [ ] Chat UI is live on Vercel and fully functional
-- [ ] Backend is live on Railway with data persisted on volume
+- [ ] Chat UI is fully functional locally
 - [ ] All 8 seed questions answerable with ≥3 cited examples each
-- [ ] Frontend ↔ Backend communication works over HTTPS
+- [ ] Frontend ↔ Backend communication works locally
 
 ---
 
@@ -448,6 +429,36 @@ Per [architecture.md §4.6](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/
 - [ ] At least 1 test question returns a split answer for contradictory evidence
 - [ ] CORS, error handling, and rate limiting are in place
 - [ ] README.md written with legal disclaimer
+
+---
+
+## Phase 7 — Deployment (Vercel & Railway)
+
+### 7.1 Railway Deployment (Backend)
+
+1. Push `backend/` to Railway
+2. Attach persistent volume mounted at `/data`
+3. Set env vars: `GROQ_API_KEY`, `GEMINI_API_KEY`, `ADMIN_SECRET`, `YOUTUBE_API_KEY`
+4. Verify: `curl https://<railway-url>/api/stats` returns valid JSON
+
+### 7.2 Vercel Deployment (Frontend)
+
+1. Push `frontend/` to Vercel
+2. Set env var: `NEXT_PUBLIC_API_URL=https://<railway-url>`
+3. Verify: frontend loads, chat connects to Railway backend
+
+### 7.3 End-to-End Validation
+
+- [x] Trigger ingest via `POST /api/admin/ingest` (demo first, then full)
+- [ ] Full pipeline runs on Railway with persistent volume
+- [ ] Ask all 8 seed questions through the chat UI on Vercel
+- [ ] Citations are correct and link to real sources
+- [x] `/api/stats` shows accurate funnel numbers
+
+### Exit Criteria
+- [ ] Chat UI is live on Vercel and fully functional
+- [ ] Backend is live on Railway with data persisted on volume
+- [ ] Frontend ↔ Backend communication works over HTTPS
 
 ---
 

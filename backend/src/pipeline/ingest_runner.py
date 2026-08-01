@@ -3,7 +3,7 @@ import asyncio
 import uuid
 import datetime
 from types import SimpleNamespace
-from src.shared.db import get_connection, insert_tagged_items, delete_irrelevant_raw
+from src.shared.db import get_connection, insert_tagged_items, delete_irrelevant_raw_batch
 from src.shared.schemas import PipelineStats, RawItem
 from src.pipeline.relevance_filter import RelevanceFilter
 from src.pipeline.extractor import Extractor
@@ -80,14 +80,14 @@ async def run_pipeline_task(mode: str, run_id: str):
         ]
         
         # Configure count based on mode
-        demo_count = 25
-        full_count = 10000
+        demo_count = 20
+        full_count = 200
         
         connector_config = SimpleNamespace(
             play_store_count=demo_count if mode == "demo" else full_count,
-            app_store_count=demo_count if mode == "demo" else 250, # 10 requests max to protect SerpApi
+            app_store_count=25 if mode == "demo" else 200, # 8 requests * 25 items
             reddit_count=demo_count if mode == "demo" else full_count,
-            youtube_count=demo_count if mode == "demo" else 500    # protect YT quota
+            youtube_count=demo_count if mode == "demo" else full_count
         )
         
         for connector in connectors:
@@ -98,7 +98,8 @@ async def run_pipeline_task(mode: str, run_id: str):
             
             # Extra safeguard for demo mode limits
             if mode == "demo":
-                raw_items = raw_items[:20]
+                limit = getattr(connector_config, f"{source}_count", 20)
+                raw_items = raw_items[:limit]
                 
             logger.info(f"[{source}] Fetched {len(raw_items)} raw items.")
             if not raw_items:
@@ -134,8 +135,8 @@ async def run_pipeline_task(mode: str, run_id: str):
             save_pipeline_stats(stats)
             
             discarded_ids = [item.id for item in raw_items if item.id not in {t.id for t in tagged_items}]
-            for d_id in discarded_ids:
-                delete_irrelevant_raw(d_id)
+            if discarded_ids:
+                delete_irrelevant_raw_batch(discarded_ids)
                 
         ingest_status["status"] = "completed"
         append_log("Pipeline completed successfully.")

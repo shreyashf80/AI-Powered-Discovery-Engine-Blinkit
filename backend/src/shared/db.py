@@ -87,6 +87,14 @@ def init_db():
         )
     ''')
     
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS cached_reports (
+            id TEXT PRIMARY KEY,
+            report_json TEXT,
+            generated_at TEXT
+        )
+    ''')
+    
     conn.commit()
     conn.close()
 
@@ -144,6 +152,14 @@ def delete_irrelevant_raw(item_id: str):
     conn = get_connection()
     c = conn.cursor()
     c.execute("DELETE FROM raw_items WHERE id = ?", (item_id,))
+    conn.commit()
+    conn.close()
+
+def delete_irrelevant_raw_batch(item_ids: List[str]):
+    if not item_ids: return
+    conn = get_connection()
+    c = conn.cursor()
+    c.executemany("DELETE FROM raw_items WHERE id = ?", [(i,) for i in item_ids])
     conn.commit()
     conn.close()
 
@@ -217,3 +233,24 @@ def is_item_ingested(item_id: str) -> bool:
     row = c.fetchone()
     conn.close()
     return bool(row)
+
+def save_cached_report(report_json: str):
+    import datetime
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute('''
+        INSERT OR REPLACE INTO cached_reports (id, report_json, generated_at)
+        VALUES (?, ?, ?)
+    ''', ('latest', report_json, datetime.datetime.utcnow().isoformat()))
+    conn.commit()
+    conn.close()
+
+def get_latest_cached_report() -> dict:
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT report_json FROM cached_reports WHERE id = 'latest'")
+    row = c.fetchone()
+    conn.close()
+    if row and row['report_json']:
+        return json.loads(row['report_json'])
+    return None

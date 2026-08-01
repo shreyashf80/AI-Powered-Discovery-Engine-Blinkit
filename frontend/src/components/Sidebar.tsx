@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, LayoutDashboard, Settings, Moon, Sun } from "lucide-react";
+import { MessageSquare, LayoutDashboard, Settings, Moon, Sun, FileText } from "lucide-react";
 import { clsx } from "clsx";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
@@ -38,13 +38,15 @@ export function Sidebar() {
 
   const links = [
     { name: "Chat", href: "/", icon: MessageSquare },
+    { name: "Summary", href: "/summary", icon: FileText },
     { name: "Pipeline", href: "/pipeline", icon: LayoutDashboard },
     { name: "Admin", href: "/admin", icon: Settings },
   ];
 
   return (
     <div className="w-full md:w-[220px] bg-bg border-b md:border-b-0 md:border-r border-surface h-auto md:h-screen flex flex-row md:flex-col fixed left-0 top-0 z-50 items-center md:items-stretch">
-      <div className="p-4 md:border-b border-surface flex-shrink-0">
+      <div className="p-4 md:border-b border-surface flex-shrink-0 flex items-center space-x-3">
+        <img src="/logo.png" alt="Blinkit Echo Logo" className="w-8 h-8 object-contain rounded-[4px]" />
         <h1 className="font-sans font-semibold text-[18px] text-ink">Blinkit Echo</h1>
       </div>
       

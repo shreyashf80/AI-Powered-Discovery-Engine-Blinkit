@@ -3,6 +3,7 @@ from typing import List, Any
 import logging
 import asyncio
 from google_play_scraper import Sort, reviews
+from google_play_scraper.features.reviews import _ContinuationToken
 
 from src.connectors.base import BaseConnector
 from src.shared.schemas import RawItem
@@ -24,12 +25,23 @@ class PlayStoreConnector(BaseConnector):
         
         state = get_connector_state(self.source_name)
         mode = state.get("mode", "backfill")
-        continuation_token = state.get("continuation_token")
+        continuation_token_str = state.get("continuation_token")
         
         if mode == "sync_new":
-            continuation_token = None
+            continuation_token_str = None
             
         logger.info(f"Play Store starting in '{mode}' mode for {app_id}")
+        
+        continuation_token = None
+        if continuation_token_str:
+            continuation_token = _ContinuationToken(
+                token=continuation_token_str,
+                lang='en',
+                country='in',
+                sort=Sort.NEWEST,
+                count=count,
+                filter_score_with=None
+            )
         
         loop = asyncio.get_event_loop()
         try:

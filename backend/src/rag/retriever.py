@@ -5,6 +5,10 @@ from src.shared.schemas import RetrievedItem
 
 logger = logging.getLogger(__name__)
 
+# Maximum cosine distance for a result to be considered relevant.
+# Lower = stricter. Typical range: 0.8 to 1.5 for bge-small-en-v1.5.
+MAX_DISTANCE = 1.3
+
 class Retriever:
     @classmethod
     def retrieve(cls, question: str, filters: Optional[Dict] = None, k: int = 15) -> List[RetrievedItem]:
@@ -46,6 +50,11 @@ class Retriever:
                 doc = results["documents"][0][idx]
                 dist = results["distances"][0][idx] if results["distances"] else 0.0
                 
+                # Filter out low-relevance results
+                if dist > MAX_DISTANCE:
+                    logger.debug(f"Skipping item {item_id} with distance {dist:.3f} (threshold: {MAX_DISTANCE})")
+                    continue
+                
                 retrieved.append(RetrievedItem(
                     id=item_id,
                     source=meta.get("source", "unknown"),
@@ -54,5 +63,6 @@ class Retriever:
                     distance=dist,
                     metadata=meta
                 ))
-                
+        
+        logger.info(f"Retrieved {len(retrieved)} relevant items (filtered from {len(results['ids'][0]) if results['ids'] else 0} candidates)")
         return retrieved

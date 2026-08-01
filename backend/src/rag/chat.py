@@ -9,7 +9,7 @@ class ChatOrchestrator:
     @classmethod
     async def chat(cls, question: str, filters: Optional[Dict] = None):
         logger.info(f"Retrieving context for: {question}")
-        retrieved_items = Retriever.retrieve(question, filters=filters, k=15)
+        retrieved_items = Retriever.retrieve(question, filters=filters, k=20)
         
         logger.info(f"Retrieved {len(retrieved_items)} items. Synthesizing answer...")
         result = await Synthesizer.synthesize(question, retrieved_items)

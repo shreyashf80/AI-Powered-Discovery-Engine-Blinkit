@@ -32,6 +32,15 @@ class Embedder:
         if not items:
             return 0
             
+        # Deduplicate items by ID to prevent ChromaDB DuplicateIDError
+        unique_items = []
+        seen_ids = set()
+        for item in items:
+            if item.id not in seen_ids:
+                unique_items.append(item)
+                seen_ids.add(item.id)
+        items = unique_items
+            
         model = cls.get_model()
         client = cls.get_chroma_client()
         

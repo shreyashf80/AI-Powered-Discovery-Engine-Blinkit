@@ -33,9 +33,12 @@ function getRelativeTime(dateString: string) {
   return `${Math.floor(diffInSeconds / 86400)}d ago`;
 }
 
+const ITEMS_PER_PAGE = 10;
+
 export default function PipelinePage() {
   const [stats, setStats] = useState<PipelineStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     fetch("/api/stats")
@@ -175,8 +178,17 @@ export default function PipelinePage() {
       {/* Individual Runs Table */}
       <div>
         <h2 className="text-[18px] font-sans font-semibold text-ink mb-6">Run History</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        
+        {/* Calculate pagination data */}
+        {(() => {
+          const totalPages = Math.ceil(stats.length / ITEMS_PER_PAGE);
+          const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+          const paginatedStats = stats.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+          
+          return (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-surface text-[13px] font-mono text-ink-muted">
                 <th className="py-3 px-2 font-normal">Timestamp</th>
@@ -189,7 +201,7 @@ export default function PipelinePage() {
               </tr>
             </thead>
             <tbody className="font-mono text-[13px] text-ink">
-              {stats.map((run, idx) => {
+              {paginatedStats.map((run, idx) => {
                 const colors = SOURCE_COLORS[run.source] || { text: "text-ink" };
                 return (
                   <tr key={`${run.run_id}-${run.source}-${idx}`} className="border-b border-surface/50 hover:bg-surface/30 transition-colors">
@@ -210,6 +222,31 @@ export default function PipelinePage() {
             </tbody>
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex justify-between items-center mt-6">
+            <button
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-4 py-2 border border-surface rounded-md text-[13px] font-sans text-ink disabled:opacity-50 hover:bg-surface/30 transition-colors"
+            >
+              Previous
+            </button>
+            <span className="text-[13px] font-mono text-ink-muted">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 border border-surface rounded-md text-[13px] font-sans text-ink disabled:opacity-50 hover:bg-surface/30 transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        )}
+        </>
+      );
+      })()}
       </div>
     </div>
   );
