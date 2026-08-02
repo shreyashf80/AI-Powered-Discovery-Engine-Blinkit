@@ -3,7 +3,7 @@ import json
 import logging
 from typing import List
 import chromadb
-from sentence_transformers import SentenceTransformer
+
 from src.shared.config import config
 from src.shared.schemas import TaggedItem
 
@@ -17,6 +17,7 @@ class Embedder:
     def get_model(cls):
         if cls._model is None:
             logger.info("Loading embedding model BAAI/bge-small-en-v1.5...")
+            from sentence_transformers import SentenceTransformer
             cls._model = SentenceTransformer("BAAI/bge-small-en-v1.5")
         return cls._model
 
