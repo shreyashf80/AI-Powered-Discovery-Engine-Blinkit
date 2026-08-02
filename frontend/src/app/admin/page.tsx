@@ -77,7 +77,7 @@ export default function AdminPage() {
   // Initial status check
   useEffect(() => {
     fetch("/api/admin/ingest/status", {
-      headers: { "Authorization": `Bearer dummy-token` }
+      headers: { "Authorization": `Bearer ${sessionStorage.getItem("adminToken") || ""}` }
     })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch status");
@@ -101,7 +101,7 @@ export default function AdminPage() {
     const interval = setInterval(async () => {
       try {
         const res = await fetch("/api/admin/ingest/status", {
-          headers: { "Authorization": `Bearer dummy-token` }
+          headers: { "Authorization": `Bearer ${sessionStorage.getItem("adminToken") || ""}` }
         });
         if (!res.ok) throw new Error("Failed to fetch status");
         const data: IngestStatus = await res.json();
@@ -163,7 +163,7 @@ export default function AdminPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer dummy-token`,
+          "Authorization": `Bearer ${sessionStorage.getItem("adminToken") || ""}`,
         },
         body: JSON.stringify({ mode }),
       });

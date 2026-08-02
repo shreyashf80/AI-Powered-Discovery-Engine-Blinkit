@@ -7,7 +7,8 @@ from src.pipeline.ingest_runner import run_pipeline_task, ingest_status
 router = APIRouter()
 
 def verify_admin(authorization: str = Header(None)):
-    # Temporarily disabled admin token requirement for data ingestion
+    if authorization != f"Bearer {config.ADMIN_SECRET}":
+        raise HTTPException(status_code=401, detail="Unauthorized: Invalid admin token")
     return True
 
 @router.post("/ingest", response_model=IngestResponse)
