@@ -21,5 +21,8 @@ RUN mkdir -p /data
 # Expose port
 EXPOSE 8000
 
-# Run FastAPI app via uvicorn (Shell form to allow $PORT evaluation)
-CMD uvicorn src.api.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Copy and use startup script
+COPY start.sh .
+RUN chmod +x start.sh
+
+ENTRYPOINT ["/bin/sh", "./start.sh"]
