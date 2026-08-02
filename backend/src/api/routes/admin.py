@@ -6,13 +6,12 @@ from src.pipeline.ingest_runner import run_pipeline_task, ingest_status
 
 router = APIRouter()
 
-def verify_admin(authorization: str = Header(None)):
-    if authorization != f"Bearer {config.ADMIN_SECRET}":
-        raise HTTPException(status_code=401, detail="Unauthorized: Invalid admin token")
-    return True
-
 @router.post("/ingest", response_model=IngestResponse)
-async def trigger_ingestion(req: IngestRequest, background_tasks: BackgroundTasks, _ = Depends(verify_admin)):
+async def trigger_ingestion(req: IngestRequest, background_tasks: BackgroundTasks, authorization: str = Header(None)):
+    if req.mode == "full":
+        if authorization != f"Bearer {config.ADMIN_SECRET}":
+            raise HTTPException(status_code=401, detail="Unauthorized: Full ingestion requires a valid admin token")
+            
     if ingest_status["status"] == "running":
         raise HTTPException(status_code=400, detail="A pipeline run is already in progress.")
         
@@ -26,7 +25,7 @@ async def trigger_ingestion(req: IngestRequest, background_tasks: BackgroundTask
     )
 
 @router.get("/ingest/status", response_model=IngestStatusResponse)
-async def get_ingestion_status(_ = Depends(verify_admin)):
+async def get_ingestion_status():
     return IngestStatusResponse(
         run_id=ingest_status["run_id"] or "",
         status=ingest_status["status"],
