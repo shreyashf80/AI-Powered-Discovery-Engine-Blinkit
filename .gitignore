@@ -37,10 +37,10 @@ share/python-wheels/
 MANIFEST
 
 # Data & DB
-data/
-*.sqlite3
-*.db
-chroma/
+# data/
+# *.sqlite3
+# *.db
+# chroma/
 
 # OS generated files
 .DS_Store
