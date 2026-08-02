@@ -200,6 +200,32 @@ export default function AdminPage() {
         </p>
       </div>
 
+      {/* Admin Security */}
+      <div className="bg-surface border rounded-lg p-6">
+        <h2 className="text-[15px] font-sans font-semibold text-ink mb-3">Admin Authentication</h2>
+        <div className="flex items-center space-x-3">
+          <input 
+            type="password"
+            value={tokenInput}
+            onChange={(e) => setTokenInput(e.target.value)}
+            placeholder="Enter Admin Secret Token"
+            className="flex-1 bg-bg border border-surface rounded-md px-3 py-2 text-[14px] text-ink font-mono focus:outline-none focus:border-ink transition-colors"
+          />
+          <button 
+            onClick={handleSaveToken}
+            className="bg-ink text-bg px-4 py-2 rounded-md text-[14px] font-medium font-sans hover:opacity-90 transition-opacity"
+          >
+            Save Token
+          </button>
+        </div>
+        {adminToken && (
+          <p className="text-[12px] font-mono text-positive mt-3 flex items-center space-x-1">
+            <CheckCircle2 size={12} />
+            <span>Token saved securely in session</span>
+          </p>
+        )}
+      </div>
+
       {/* Ingestion Controls */}
       <div className="space-y-4">
         <h2 className="text-[18px] font-sans font-semibold text-ink">Data Ingestion</h2>
