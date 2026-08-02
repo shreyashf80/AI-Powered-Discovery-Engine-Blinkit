@@ -2,7 +2,7 @@ import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    DATA_DIR: str = "/data"
+    DATA_DIR: str = "data"
     
     GROQ_API_KEY: str = ""
     GEMINI_API_KEYS: str = ""  # Comma-separated list of Gemini API keys for rotation
