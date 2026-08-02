@@ -18,9 +18,7 @@ COPY . .
 # Ensure data directory exists
 RUN mkdir -p /data
 
-# Expose port
-EXPOSE 8000
-
+# (EXPOSE removed to avoid Railway port mapping conflicts)
 # Copy and use startup script
 COPY start.sh .
 RUN chmod +x start.sh
