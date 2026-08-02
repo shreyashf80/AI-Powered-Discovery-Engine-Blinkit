@@ -6,11 +6,21 @@ from src.api.routes import chat, stats, admin, summary
 
 app = FastAPI(title="Blinkit Discovery Engine API")
 
+import os
+
 # Setup CORS
-# Allowing localhost for local development, and assuming Vercel frontend in production
+# Allowing localhost for local development, and dynamic FRONTEND_URL for production
+allowed_origins = [
+    "http://localhost:3000", 
+    "http://127.0.0.1:3000",
+]
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url:
+    allowed_origins.append(frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "https://ai-powered-discovery-engine-blinkit.vercel.app"], 
+    allow_origins=allowed_origins, 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
