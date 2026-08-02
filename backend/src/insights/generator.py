@@ -43,15 +43,14 @@ async def generate_summary() -> InsightSummary:
     
     for item in batch_result.get("summaries", []):
         citations = item.get("citations", [])
-        sample_size = sum(source_counts.values()) # Global sample size for the batch
-        confidence = "High" if len(citations) >= 3 else "Medium" if len(citations) > 0 else "Low"
+        confidence = item.get("confidence", "Medium")
         
         summary_items.append(SummaryItem(
             question=item.get("question", ""),
             answer=item.get("answer", ""),
             citations=citations,
             confidence=confidence,
-            sample_size=sample_size
+            sample_size=0
         ))
         
     emergent_themes = batch_result.get("emergent_themes", [])

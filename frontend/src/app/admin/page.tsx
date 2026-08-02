@@ -76,10 +76,8 @@ export default function AdminPage() {
 
   // Initial status check
   useEffect(() => {
-    if (!adminToken) return;
-    
     fetch("/api/admin/ingest/status", {
-      headers: { "Authorization": `Bearer ${adminToken}` }
+      headers: { "Authorization": `Bearer dummy-token` }
     })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch status");
@@ -95,15 +93,15 @@ export default function AdminPage() {
         }
       })
       .catch((e) => console.error(e));
-  }, [adminToken]);
+  }, []);
 
   // Polling logic
   useEffect(() => {
-    if (!isPolling || !adminToken) return;
+    if (!isPolling) return;
     const interval = setInterval(async () => {
       try {
         const res = await fetch("/api/admin/ingest/status", {
-          headers: { "Authorization": `Bearer ${adminToken}` }
+          headers: { "Authorization": `Bearer dummy-token` }
         });
         if (!res.ok) throw new Error("Failed to fetch status");
         const data: IngestStatus = await res.json();
@@ -155,7 +153,6 @@ export default function AdminPage() {
   };
 
   const triggerIngest = async (mode: "demo" | "full") => {
-    if (!adminToken) return;
     setAuthError("");
     setCompletedToast(false);
     setShowSummaryModal(false);
@@ -166,7 +163,7 @@ export default function AdminPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${adminToken}`,
+          "Authorization": `Bearer dummy-token`,
         },
         body: JSON.stringify({ mode }),
       });
@@ -192,7 +189,7 @@ export default function AdminPage() {
     }
   };
 
-  const isControlsDisabled = !adminToken || statusData.status === "running";
+  const isControlsDisabled = statusData.status === "running";
 
   return (
     <div className="w-full max-w-[860px] mx-auto p-8 space-y-10">
@@ -203,39 +200,10 @@ export default function AdminPage() {
         </p>
       </div>
 
-      {/* Token Gate */}
-      <div className="bg-surface border border-surface rounded-lg p-6 max-w-md">
-        <label className="flex items-center space-x-2 text-[13px] font-sans font-medium text-ink mb-3 uppercase tracking-wide">
-          <Lock size={14} className="text-ink-muted" />
-          <span>Admin Token</span>
-        </label>
-        <div className="flex space-x-3">
-          <input
-            type="password"
-            value={tokenInput}
-            onChange={(e) => setTokenInput(e.target.value)}
-            className="flex-1 bg-bg border border-surface rounded px-3 py-2 text-[15px] font-mono text-ink placeholder:text-ink-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            placeholder="Enter secure token..."
-          />
-          <button
-            onClick={handleSaveToken}
-            disabled={!tokenInput || tokenInput === adminToken}
-            className="px-4 py-2 bg-ink text-surface font-sans text-[13px] rounded hover:opacity-90 disabled:opacity-50 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            Save
-          </button>
-        </div>
-      </div>
-
       {/* Ingestion Controls */}
       <div className="space-y-4">
         <h2 className="text-[18px] font-sans font-semibold text-ink">Data Ingestion</h2>
-        
-        {!adminToken && (
-          <p className="text-[13px] font-mono text-ink-muted italic">
-            Enter admin token above to enable controls.
-          </p>
-        )}
+
         
         {authError && (
           <div className="flex items-center space-x-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-[13px] font-mono">

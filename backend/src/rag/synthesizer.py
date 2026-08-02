@@ -122,7 +122,8 @@ CRITICAL: The `answer` field must be a valid JSON string. All newlines in the ma
   "summaries": [
     {
       "question": "Exact text of the question",
-      "answer": "Your detailed markdown-formatted answer structured for a Product Manager."
+      "answer": "Your detailed markdown-formatted answer structured for a Product Manager.",
+      "confidence": "High, Medium, or Low (Rate High if >3 sources back this up, Low if <2)"
     }
   ],
   "emergent_themes": [
