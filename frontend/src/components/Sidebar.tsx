@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, LayoutDashboard, Settings, Moon, Sun, FileText } from "lucide-react";
+import { MessageSquare, FileText, LayoutDashboard, Settings, Moon, Sun, Database } from "lucide-react";
 import { clsx } from "clsx";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
@@ -39,6 +39,7 @@ export function Sidebar() {
   const links = [
     { name: "Chat", href: "/", icon: MessageSquare },
     { name: "Summary", href: "/summary", icon: FileText },
+    { name: "Themes", href: "/themes", icon: Database },
     { name: "Pipeline", href: "/pipeline", icon: LayoutDashboard },
     { name: "Admin", href: "/admin", icon: Settings },
   ];

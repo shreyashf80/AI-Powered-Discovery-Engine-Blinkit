@@ -138,6 +138,16 @@ async def run_pipeline_task(mode: str, run_id: str):
             if discarded_ids:
                 delete_irrelevant_raw_batch(discarded_ids)
                 
+        append_log("Starting ML Vector Clustering to generate Discovery Themes...")
+        from src.insights.cluster import generate_cluster_themes
+        from src.shared.db import save_cached_themes
+        
+        themes_data = await generate_cluster_themes()
+        if themes_data:
+            import json
+            save_cached_themes(run_id, json.dumps(themes_data))
+            append_log("Themes generated successfully.")
+            
         ingest_status["status"] = "completed"
         append_log("Pipeline completed successfully.")
     except Exception as e:

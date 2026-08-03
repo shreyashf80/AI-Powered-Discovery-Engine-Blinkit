@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from src.shared.db import init_db
-from src.api.routes import chat, stats, admin, summary
+from src.api.routes import chat, stats, admin, summary, themes
 
 app = FastAPI(title="Blinkit Discovery Engine API")
 
@@ -40,4 +40,5 @@ async def startup_event():
 app.include_router(chat.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")
 app.include_router(summary.router, prefix="/api")
+app.include_router(themes.router, prefix="/api")
 app.include_router(admin.router, prefix="/api/admin")

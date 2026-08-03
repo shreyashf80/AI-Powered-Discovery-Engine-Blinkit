@@ -1,6 +1,7 @@
 import sqlite3
 import json
 import os
+import datetime
 from typing import List
 from src.shared.config import config
 from src.shared.schemas import RawItem, TaggedItem, PipelineStats
@@ -95,6 +96,14 @@ def init_db():
         )
     ''')
     
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS cached_themes (
+            id TEXT PRIMARY KEY,
+            run_id TEXT,
+            themes_json TEXT,
+            timestamp TEXT
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -253,4 +262,24 @@ def get_latest_cached_report() -> dict:
     conn.close()
     if row and row['report_json']:
         return json.loads(row['report_json'])
+    return None
+
+def save_cached_themes(run_id: str, themes_json: str):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute('''
+        INSERT OR REPLACE INTO cached_themes (id, run_id, themes_json, timestamp)
+        VALUES ('latest', ?, ?, ?)
+    ''', (run_id, themes_json, datetime.datetime.now(datetime.timezone.utc).isoformat()))
+    conn.commit()
+    conn.close()
+
+def get_cached_themes() -> dict:
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT themes_json FROM cached_themes WHERE id = 'latest'")
+    row = c.fetchone()
+    conn.close()
+    if row and row['themes_json']:
+        return json.loads(row['themes_json'])
     return None
