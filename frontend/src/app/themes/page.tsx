@@ -71,7 +71,15 @@ export default function ThemesPage() {
       <div className="max-w-[860px] mx-auto p-8 mt-12 flex flex-col items-center text-center">
         <AlertCircle size={48} className="text-red-500 mb-4" />
         <h2 className="text-[20px] font-sans font-bold text-ink mb-2">Error Loading Themes</h2>
-        <p className="text-[15px] font-sans text-ink-muted">{error}</p>
+        <p className="text-[15px] font-sans text-ink-muted mb-6">{error}</p>
+        <button 
+          onClick={handleRegenerate}
+          disabled={isRegenerating}
+          className="flex items-center space-x-2 bg-ink text-bg px-4 py-2.5 rounded-lg text-[14px] font-sans font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+        >
+          <Database size={16} className={isRegenerating ? "animate-pulse" : ""} />
+          <span>{isRegenerating ? "Generating Themes..." : "Generate Themes"}</span>
+        </button>
       </div>
     );
   }
@@ -81,9 +89,17 @@ export default function ThemesPage() {
       <div className="max-w-[860px] mx-auto p-8 mt-12 flex flex-col items-center text-center">
         <Database size={48} className="text-ink-muted mb-4 opacity-50" />
         <h2 className="text-[20px] font-sans font-bold text-ink mb-2">No Themes Found</h2>
-        <p className="text-[15px] font-sans text-ink-muted max-w-[400px]">
-          There are no machine learning clusters generated yet. Go to the Admin Console and run the Full Pipeline to generate them.
+        <p className="text-[15px] font-sans text-ink-muted max-w-[400px] mb-6">
+          There are no machine learning clusters generated yet.
         </p>
+        <button 
+          onClick={handleRegenerate}
+          disabled={isRegenerating}
+          className="flex items-center space-x-2 bg-ink text-bg px-4 py-2.5 rounded-lg text-[14px] font-sans font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+        >
+          <Database size={16} className={isRegenerating ? "animate-pulse" : ""} />
+          <span>{isRegenerating ? "Generating Themes..." : "Generate Themes"}</span>
+        </button>
       </div>
     );
   }
