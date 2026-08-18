@@ -15,8 +15,8 @@
 |---|---|
 | ~~Register Reddit developer app~~ | **Not needed** — Reddit closed self-service developer registration. We use Arctic Shift + PullPush (keyless community mirrors) instead |
 | Get YouTube Data API key | Enable YouTube Data API v3 in Google Cloud Console → create API key |
-| Get Groq API key | [console.groq.com](https://console.groq.com) → free-tier key |
-| Get Gemini API key | [aistudio.google.com](https://aistudio.google.com) → key for Gemini 2.0 Flash |
+
+| Get Gemini API key | [aistudio.google.com](https://aistudio.google.com) → key for gemini-3.6-flash |
 | Create Railway account | [railway.com](https://railway.com) → new project + persistent volume |
 | Create Vercel account | [vercel.com](https://vercel.com) |
 | Verify Arctic Shift + PullPush uptime | Check [Arctic Shift status](https://status.arctic-shift.photon-reddit.com) and test `https://api.pullpush.io/reddit/search/submission/?q=blinkit&size=1` — both are volunteer-run with no uptime guarantee |
@@ -26,8 +26,8 @@
 | Task | Details |
 |---|---|
 | Initialize `backend/` | Python project structure per [architecture.md §7](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/docs/architecture.md#L462) — create all `__init__.py` files, empty module directories |
-| `backend/requirements.txt` | `fastapi`, `uvicorn`, `bascraper`, `google-play-scraper`, `langdetect`, `chromadb`, `sentence-transformers`, `groq`, `google-genai`, `pydantic`, `beautifulsoup4`, `requests`, `aiohttp`, `google-api-python-client`, `numpy<2` |
-| `backend/.env.example` | `GROQ_API_KEY`, `GEMINI_API_KEY`, `ADMIN_SECRET`, `YOUTUBE_API_KEY`, `DATA_DIR=/data` (no Reddit credentials needed — Arctic Shift and PullPush are keyless) |
+| `backend/requirements.txt` | `fastapi`, `uvicorn`, `bascraper`, `google-play-scraper`, `langdetect`, `chromadb`, `sentence-transformers`, `Gemini`, `google-genai`, `pydantic`, `beautifulsoup4`, `requests`, `aiohttp`, `google-api-python-client`, `numpy<2` |
+| `backend/.env.example` | `Gemini_API_KEY`, `GEMINI_API_KEY`, `ADMIN_SECRET`, `YOUTUBE_API_KEY`, `DATA_DIR=/data` (no Reddit credentials needed — Arctic Shift and PullPush are keyless) |
 | Initialize `frontend/` | `npx -y create-next-app@latest ./frontend` — TypeScript + TailwindCSS + App Router |
 | `backend/Dockerfile` | Python 3.11 slim, pip install, uvicorn entrypoint |
 | `backend/railway.toml` | Volume mount at `/data`, build/start commands |
@@ -50,7 +50,7 @@
 #### [NEW] [config.py](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/backend/src/shared/config.py)
 - Pydantic `BaseSettings` loading from environment / `.env`
 - Paths: `DATA_DIR`, `CHROMA_DIR`, `SQLITE_PATH`
-- API keys: `GROQ_API_KEY`, `GEMINI_API_KEY`, `ADMIN_SECRET`, `YOUTUBE_API_KEY`
+- API keys: `Gemini_API_KEY`, `GEMINI_API_KEY`, `ADMIN_SECRET`, `YOUTUBE_API_KEY`
 
 ### 1.2 Data Schemas
 
@@ -81,7 +81,7 @@
 ### 1.5 LLM Client
 
 #### [NEW] [llm.py](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/backend/src/shared/llm.py)
-- `LLMClient` — Groq-primary, Gemini-fallback per [architecture.md §11](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/docs/architecture.md#L737-L771)
+- `LLMClient` — Gemini per [architecture.md §11](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/docs/architecture.md#L737-L771)
 - `async complete(system: str, user: str) -> LLMResponse`
 - `LLMResponse`: `content`, `llm_used`, `tokens_used`
 - Exponential backoff on rate-limit errors
@@ -91,7 +91,7 @@
 - [x] `config.py` loads env vars successfully
 - [x] `schemas.py` models can serialize/deserialize sample data
 - [x] `db.py` creates SQLite tables and round-trips a test row
-- [x] `llm.py` makes a test call to Groq and falls back to Gemini on simulated failure
+- [x] `llm.py` makes a test call to Gemini and falls back to Gemini on simulated failure
 
 ---
 
@@ -203,7 +203,7 @@ Per [architecture.md §4.3](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/
 Per [architecture.md §4.4](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/docs/architecture.md#L281-L324):
 
 - `async process_batch(batch, llm) -> list[TaggedItem]`
-  - Gemini 2.0 Flash as **primary LLM** (1,000,000 TPM limit perfectly suits batching). Groq is fallback.
+  - gemini-3.6-flash as **primary LLM** (1,000,000 TPM limit perfectly suits batching). 
   - Bundles 25 items into a single JSON array per prompt to avoid daily request limits.
   - Returns `None` for items LLM deems `relevant: false` (increments funnel counter).
 - `async extract_all(items, llm) -> list[TaggedItem]`
@@ -254,7 +254,7 @@ Per [architecture.md §4.5](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/
 - [x] `relevant: true/false` making sensible decisions
 - [x] Delivery complaints with category mentions are kept (not filtered)
 - [x] JSON output is valid and parseable by Pydantic
-- [x] Groq primary / Gemini fallback working
+- [x] Gemini working
 - [x] Cross-source deduplication catching duplicates
 - [x] Sample of *discarded* items reviewed — filter isn't cutting real signal
 
@@ -438,7 +438,7 @@ Per [architecture.md §4.6](file:///Users/shreyash/NextLeap/NL%20Grad%20Project/
 
 1. Push `backend/` to Railway
 2. Attach persistent volume mounted at `/data`
-3. Set env vars: `GROQ_API_KEY`, `GEMINI_API_KEY`, `ADMIN_SECRET`, `YOUTUBE_API_KEY`
+3. Set env vars: `Gemini_API_KEY`, `GEMINI_API_KEY`, `ADMIN_SECRET`, `YOUTUBE_API_KEY`
 4. Verify: `curl https://<railway-url>/api/stats` returns valid JSON
 
 ### 7.2 Vercel Deployment (Frontend)

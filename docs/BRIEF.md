@@ -27,7 +27,7 @@ The Blinkit Discovery Engine is an AI-powered data pipeline and Retrieval-Augmen
       "play_store": 14,
       "app_store": 1
     },
-    "llm_used": "groq"
+    "llm_used": "Gemini"
   }
   ```
 

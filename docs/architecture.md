@@ -13,7 +13,7 @@ The Discovery Engine is a **batch-ingest, RAG-powered research tool** that trans
 | Principle | Implication |
 |---|---|
 | **Full-stack cloud deployment** | Backend (FastAPI + pipeline + ChromaDB) on Railway; frontend (Next.js Chat UI) on Vercel |
-| **Dual-LLM with fallback** | Groq (primary) and Gemini (fallback) — try Groq first, fall back to Gemini on rate-limit or error |
+| **Dual-LLM with fallback** | Gemini — try Gemini first, fall back to Gemini on rate-limit or error |
 | **Aggressive data pruning** | Only `relevant: true` items are kept long-term. Irrelevant items are counted for funnel stats then purged to stay within free-tier storage limits |
 | **Zero paid ingestion APIs** | Every source connector uses free/unauthenticated access only |
 
@@ -62,13 +62,13 @@ The Discovery Engine is a **batch-ingest, RAG-powered research tool** that trans
 │  │   └──────────────────────────┬──────────────────────────────────────┘     │   │
 │  │                              │                                            │   │
 │  │   Stage 2 — LLM extraction (merged with Extraction Layer below)          │   │
-│  │   • Batch Gemini call (fallback: Groq): tags + `relevant: true/false`    │   │
+│  │   • Batch Gemini call (fallback: Gemini): tags + `relevant: true/false`    │   │
 │  └──────────────────────────────┬────────────────────────────────────────────┘   │
 │                                 │                                                │
 │  ┌──────────────────────────────▼────────────────────────────────────────────┐   │
 │  │                       4. EXTRACTION LAYER                                 │   │
 │  │                                                                           │   │
-│  │   • Batch LLM call (25 items/prompt) (Gemini primary, Groq fallback)      │   │
+│  │   • Batch LLM call (25 items/prompt) (Gemini)      │   │
 │  │   • Output: structured JSON array (taxonomy + relevant flag)              │   │
 │  │   • Items tagged `relevant: false` → increment funnel counter, then purge │   │
 │  │   • Items tagged `relevant: true` → persist to Tagged Store               │   │
@@ -88,7 +88,7 @@ The Discovery Engine is a **batch-ingest, RAG-powered research tool** that trans
 │  │                                                                           │   │
 │  │   ┌────────────────┐    ┌────────────────┐    ┌───────────────────┐       │   │
 │  │   │ Chroma DB      │───▶│  Retriever     │───▶│ LLM Synthesis     │       │   │
-│  │   │ (from volume)  │    │ (semantic +    │    │ (Groq → Gemini    │       │   │
+│  │   │ (from volume)  │    │ (semantic +    │    │ (Gemini    │       │   │
 │  │   │                │    │  metadata      │    │  fallback)        │       │   │
 │  │   │                │    │  filtering)    │    │                   │       │   │
 │  │   └────────────────┘    └────────────────┘    └───────────────────┘       │   │
@@ -168,7 +168,7 @@ Only items with `relevant: true` are stored here. Irrelevant items are counted a
   "timestamp": "ISO 8601",
   "rating": "number | null",
   "url": "string | null",
-  "extraction_model": "string — model used (groq/gemini)",
+  "extraction_model": "string — model used (Gemini)",
   "extracted_at": "ISO 8601"
 }
 ```
@@ -238,7 +238,7 @@ Runs sequentially after ingestion:
 
 1. **Deduplication** — content-hash (SHA-256 of normalized body) catches cross-source duplicates
 2. **Language detection** — `langdetect` or `lingua-py`; stores `language_detected`
-3. **Translation / normalization** — Hinglish and code-mixed text normalized via Groq/Gemini (batched); original preserved in `language_original`
+3. **Translation / normalization** — Hinglish and code-mixed text normalized via Gemini (batched); original preserved in `language_original`
 4. **Spam filter** — heuristic rules: repetitive patterns, bot signatures, promotional links
 
 ### 4.3 Relevance Filter
@@ -282,13 +282,13 @@ Two stages, both running before embedding:
 
 A single LLM call per item handles both taxonomy tagging and relevance classification.
 
-**LLM Strategy — Groq primary, Gemini fallback:**
+**LLM Strategy — Gemini:**
 
 ```
          Item to extract
                │
        ┌───────▼───────┐
-       │   Groq API    │  (Llama 3.3 70B or similar)
+       │   Gemini API    │  (gemini-3.6-flash or similar)
        │   try first   │
        └───────┬───────┘
                │
@@ -297,7 +297,7 @@ A single LLM call per item handles both taxonomy tagging and relevance classific
               no (rate-limit / 5xx / timeout)
                │
        ┌───────▼───────┐
-       │  Gemini API   │  (Gemini 2.0 Flash via Google AI Studio)
+       │  Gemini API   │  (gemini-3.6-flash via Google AI Studio)
        │  fallback     │
        └───────┬───────┘
                │
@@ -318,7 +318,7 @@ User:   <item body>
 ```
 
 **Cost controls:**
-- Groq free tier: ~30 req/min, 14,400 req/day — sufficient for batch extraction
+- Gemini free tier: ~30 req/min, 14,400 req/day — sufficient for batch extraction
 - Gemini free tier: 15 RPM / 1 million TPM — generous fallback
 - Batched requests with concurrency limits respecting rate limits
 - Dry-run gate: test on ~20-30 items per source before scaling
@@ -352,7 +352,7 @@ User question (from Vercel frontend)
            │
            ▼
 ┌─────────────────────┐
-│   LLM Synthesis     │  • Groq primary, Gemini fallback
+│   LLM Synthesis     │  • Gemini
 │                     │  • Generates answer from retrieved chunks
 │                     │  • Inline citations [Source: Play Store, ★2, 2025-03]
 │                     │  • Shows splits when evidence is contradictory
@@ -400,7 +400,7 @@ A standalone frontend deployed on Vercel, consuming the Railway FastAPI backend:
 │  │  • GET  /api/stats              │ │        │  │  • Shows citations    │   │
 │  │  • POST /api/admin/ingest       │ │        │  │                       │   │
 │  │                                 │ │        │  └───────────────────────┘   │
-│  │  • Groq API (primary LLM)      │ │        │                               │
+│  │  • Gemini API (primary LLM)      │ │        │                               │
 │  │  • Gemini API (fallback LLM)   │ │        │  Deployed via: `vercel`       │
 │  └──────────────┬──────────────────┘ │        │  Framework: Next.js           │
 │                 │                      │        └───────────────────────────────┘
@@ -414,7 +414,7 @@ A standalone frontend deployed on Vercel, consuming the Railway FastAPI backend:
 │  └─────────────────────────────────┘ │
 │                                       │
 │  Env vars:                            │
-│  • GROQ_API_KEY                       │
+│  • Gemini_API_KEY                       │
 │  • GEMINI_API_KEY                     │
 │  • ADMIN_SECRET (for ingest trigger)  │
 │  • YOUTUBE_API_KEY                    │
@@ -511,7 +511,7 @@ NL Grad Project/
 │   │   └── shared/                         # Shared utilities
 │   │       ├── __init__.py
 │   │       ├── config.py                   # Settings, API keys, paths
-│   │       ├── llm.py                      # Groq/Gemini client with fallback logic
+│   │       ├── llm.py                      # Gemini client with fallback logic
 │   │       ├── db.py                       # SQLite connection + queries
 │   │       ├── schemas.py                  # RawItem, TaggedItem Pydantic models
 │   │       ├── taxonomy.py                 # Canonical category lists, enums
@@ -560,8 +560,8 @@ NL Grad Project/
 |---|---|---|
 | Language | Python | 3.11+ |
 | Web framework | FastAPI | + Uvicorn |
-| LLM — primary | Groq API | Llama 3.3 70B (free tier: 30 RPM, 14,400 req/day) |
-| LLM — fallback | Google Gemini API | Gemini 2.0 Flash (free tier: 15 RPM, 1M TPM) |
+| LLM — primary | Gemini API | gemini-3.6-flash |
+| LLM — fallback | Google Gemini API | gemini-3.6-flash |
 | Embedding | sentence-transformers (`BAAI/bge-small-en-v1.5`) | Free, local, ~133MB model |
 | Vector DB | ChromaDB | Persistent mode on Railway Volume |
 | Data store | SQLite | Lightweight, single-file, on Railway Volume |
@@ -595,14 +595,14 @@ flowchart TD
         RAW[(SQLite raw_items<br/>transient)]
         CLN[Cleaning Layer<br/>Dedup · Language · Spam]
         RF1[Stage 1 Filter<br/>Rule-based · Free]
-        EXT[Extraction Layer<br/>Groq primary · Gemini fallback]
+        EXT[Extraction Layer<br/>Gemini]
         TAG[(SQLite tagged_items<br/>relevant only)]
         STATS[(pipeline_stats<br/>funnel counters)]
         EMB[Embedder<br/>sentence-transformers]
         CHR[(ChromaDB<br/>Railway Volume)]
         API[FastAPI<br/>RAG + Admin endpoints]
         RET[Retriever<br/>Chroma + Metadata Filters]
-        SYN[Synthesizer<br/>Groq/Gemini + Citations]
+        SYN[Synthesizer<br/>Gemini + Citations]
     end
 
     subgraph Vercel["Vercel Frontend"]
@@ -662,7 +662,7 @@ flowchart TD
     "reddit": { "cited": 3, "total_relevant": 128 }
   },
   "has_contradictory_evidence": false,
-  "llm_used": "groq"
+  "llm_used": "Gemini"
 }
 ```
 
@@ -757,39 +757,39 @@ Returns current status and progress for the active pipeline run, including persi
 
 ## 11. LLM Integration — Dual-Provider Strategy
 
-### Groq (Primary)
+### Gemini (Primary)
 
 | Property | Value |
 |---|---|
-| Model | `llama-3.3-70b-versatile` (or latest available) |
+| Model | `gemini-3.6-flash` (or latest available) |
 | Free tier limits | 30 RPM, 14,400 requests/day, 131,072 token context |
 | Used for | Extraction, RAG synthesis, translation |
-| SDK | `groq` Python package |
+| SDK | `Gemini` Python package |
 
 ### Gemini (Fallback)
 
 | Property | Value |
 |---|---|
-| Model | `gemini-2.0-flash` |
+| Model | `gemini-3.6-flash` |
 | Free tier limits | 15 RPM, 1,000,000 TPM, 1,500 RPD |
-| Used for | Fallback when Groq is rate-limited or errors |
+| Used for | Fallback when Gemini is rate-limited or errors |
 | SDK | `google-genai` Python package |
 
 ### Fallback Logic
 
 ```python
 class LLMClient:
-    """Tries Groq first, falls back to Gemini on failure."""
+    """Tries Gemini first, falls back to Gemini on failure."""
 
     async def complete(self, system: str, user: str) -> LLMResponse:
         try:
-            return await self._groq_call(system, user)
+            return await self._Gemini_call(system, user)
         except (RateLimitError, ServerError, TimeoutError):
-            logger.warning("Groq failed, falling back to Gemini")
+            logger.warning("Gemini failed, falling back to Gemini")
             return await self._gemini_call(system, user)
 ```
 
-The response object always includes `llm_used: "groq" | "gemini"` for transparency.
+The response object always includes `llm_used: "Gemini" | "gemini"` for transparency.
 
 ---
 
@@ -797,9 +797,9 @@ The response object always includes `llm_used: "groq" | "gemini"` for transparen
 
 ### 12.1 Dual-LLM vs. Single-LLM Pipeline
 
-**Decision:** Use Groq as the primary LLM with Gemini as fallback, for both extraction and synthesis.
+**Decision:** Use Gemini as the primary LLM with Gemini as fallback, for both extraction and synthesis.
 
-**Rationale:** Both providers offer generous free tiers. Groq is extremely fast (inference on custom hardware), making it ideal for batch extraction. Gemini provides a safety net when Groq's rate limits are hit. This avoids any single point of failure and keeps the entire pipeline zero-cost.
+**Rationale:** Both providers offer generous free tiers. Gemini is extremely fast (inference on custom hardware), making it ideal for batch extraction. Gemini provides a safety net when Gemini's rate limits are hit. This avoids any single point of failure and keeps the entire pipeline zero-cost.
 
 ### 12.2 SQLite vs. JSON Files for Storage
 
@@ -857,7 +857,7 @@ Splitting lets each service use the platform it's best suited for. Vercel is the
 | PullPush unreachable | Retry the query via Arctic Shift; log which service was used |
 | Both Reddit mirrors unreachable | Log error; report `raw_ingested: 0` for Reddit in `pipeline_stats`; pipeline continues without Reddit data (FR12) |
 | Reddit mirror returns stale data | Archive mirrors may lag on very recent posts (hours to days); accept coverage gap for the most recent threads and document it |
-| Groq API error | Automatic fallback to Gemini; log which provider was used |
+| Gemini API error | Automatic fallback to Gemini; log which provider was used |
 | Gemini API error (both providers down) | Retry with exponential backoff (max 3 retries); failed items logged and skipped, not pipeline-blocking |
 | LLM error during RAG synthesis | Return error to user with "try again" prompt; no silent failure |
 | Railway Volume full | Pipeline checks available space before starting; alert via `/api/stats` response |
@@ -897,7 +897,7 @@ TOTAL           │        2,750 │        2,150 │               1,635 │   
 ### Pipeline Logs
 
 - Per-connector timing and error counts
-- LLM provider usage breakdown (Groq vs. Gemini calls)
+- LLM provider usage breakdown (Gemini vs. Gemini calls)
 - Filter discard reasons (aggregated counts per rule)
 - Embedding batch timing
 - Storage usage on Railway Volume

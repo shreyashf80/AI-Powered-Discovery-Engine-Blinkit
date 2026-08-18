@@ -64,8 +64,8 @@ This document catalogs edge cases, failure modes, and boundary conditions across
 |---|---|---|---|---|
 | C-1 | Cross-source exact duplicate | Same review text posted on both Play Store and Reddit | SHA-256 content hash matches; keep the first-seen copy, drop the duplicate | Content-hash dedup runs across all sources |
 | C-2 | Near-duplicate but not exact | Same user writes slightly different reviews on Play Store vs App Store | Content-hash won't catch this; both are kept and independently tagged | Acceptable — LLM may tag them differently based on nuance; funnel stats reflect both |
-| C-3 | `langdetect` misclassifies language | Short Hinglish text detected as `en` instead of `hi` | Translation step is skipped; LLM extraction may still work (Groq/Gemini handle Hinglish) | For short text, consider running translation regardless if source is Indian |
-| C-4 | Translation LLM call fails | Groq + Gemini both rate-limited during translation batch | Keep original untranslated text; mark `language_original` = body; proceed to extraction | LLM extraction models handle Hinglish reasonably even without explicit translation |
+| C-3 | `langdetect` misclassifies language | Short Hinglish text detected as `en` instead of `hi` | Translation step is skipped; LLM extraction may still work (Gemini handle Hinglish) | For short text, consider running translation regardless if source is Indian |
+| C-4 | Translation LLM call fails | Gemini both rate-limited during translation batch | Keep original untranslated text; mark `language_original` = body; proceed to extraction | LLM extraction models handle Hinglish reasonably even without explicit translation |
 | C-5 | Spam bot with unique content | Bot posts unique-looking promotional text each time | Content-hash dedup won't catch it; spam filter needs to detect promotional patterns (URLs, repeated CTAs) | Pattern-match on promotional indicators: affiliate links, "use code", "download now" |
 | C-6 | Legitimate review contains a URL | User links to a screenshot or product page | Don't strip the URL from body; only flag as spam if the *entire* content is a URL with no other text | Spam filter checks: is the item *predominantly* a link, or does it have substantive text alongside? |
 | C-7 | Body is HTML-encoded | Scraper returns `&amp;`, `&lt;`, etc. | Decode HTML entities before hashing and processing | Run `html.unescape()` as first step in cleaner |
@@ -91,17 +91,17 @@ This document catalogs edge cases, failure modes, and boundary conditions across
 
 | # | Edge Case | Trigger | Expected Behavior | Mitigation |
 |---|---|---|---|---|
-| E-1 | LLM returns invalid JSON | Groq returns markdown-wrapped JSON or malformed output | Parse attempt fails; retry once with a stronger "return ONLY valid JSON" prompt | Regex-strip markdown fences (````json...````) before parsing; retry with explicit format instructions |
+| E-1 | LLM returns invalid JSON | Gemini returns markdown-wrapped JSON or malformed output | Parse attempt fails; retry once with a stronger "return ONLY valid JSON" prompt | Regex-strip markdown fences (````json...````) before parsing; retry with explicit format instructions |
 | E-2 | LLM hallucinates a category | LLM outputs `"category_mentioned": ["Toys & Games"]` — not in canonical list | Pydantic validation rejects non-canonical category | Enum validation against `CORE_CATEGORIES ∪ EXPLORATORY_CATEGORIES`; reject or map to `"other"` |
 | E-3 | LLM sets multiple behavior_types | Review describes both `habit` and `abandoned-attempt` | Schema allows only one value | Prompt instructs: "pick the dominant behavior_type"; if LLM returns a list, take the first |
-| E-4 | Groq rate-limited, Gemini also rate-limited | Both free tiers exhausted simultaneously | Log failure; skip this item; increment a `failed_extraction` counter in pipeline stats | After 3 retries on both providers, mark item as `extraction_failed` and continue |
+| E-4 | Gemini rate-limited, Gemini also rate-limited | Both free tiers exhausted simultaneously | Log failure; skip this item; increment a `failed_extraction` counter in pipeline stats | After 3 retries on both providers, mark item as `extraction_failed` and continue |
 | E-5 | LLM marks everything as `relevant: false` | Prompt is too strict; taxonomy wording causes over-filtering | Funnel stats show `relevant_embedded: 0` — no data to query | **Dry-run gate catches this** — check before scaling; adjust prompt/taxonomy |
 | E-6 | LLM marks everything as `relevant: true` | Prompt is too lenient | Storage bloats; many irrelevant items embedded | Dry-run gate: manually inspect tagged output; tighten relevance criteria in prompt |
 | E-7 | Review mentions multiple categories | `"I buy milk and electronics from Blinkit"` | `category_mentioned: ["Dairy & Bakery", "Electronics & Accessories"]` — list is valid | Schema supports list of categories; both get `category_tier` labels |
 | E-8 | LLM returns empty `source_snippet` | LLM doesn't extract a representative excerpt | Use full `body` as fallback snippet; log warning | If `source_snippet` is empty/null, fall back to first 200 chars of `body` |
-| E-9 | Item body exceeds LLM context window | A very long Reddit post (>10,000 tokens) | Truncate to first N tokens before sending to LLM | Pre-truncate at ~3,000 tokens per item (well within 131K Groq context, but keeps costs low) |
-| E-10 | Concurrent extraction hits rate limits | 5 concurrent requests all trigger Groq rate limiting simultaneously | All 5 fall back to Gemini; Gemini may also rate-limit | Semaphore-controlled concurrency; per-provider rate tracking; dynamic concurrency reduction on rate-limit signals |
-| E-11 | LLM response is in a different language | Groq/Gemini responds in Hindi to a Hindi input | Parse fails if field names are translated | System prompt explicitly states: "Always respond in English. Field names must match the schema exactly." |
+| E-9 | Item body exceeds LLM context window | A very long Reddit post (>10,000 tokens) | Truncate to first N tokens before sending to LLM | Pre-truncate at ~3,000 tokens per item (well within 131K Gemini context, but keeps costs low) |
+| E-10 | Concurrent extraction hits rate limits | 5 concurrent requests all trigger Gemini rate limiting simultaneously | All 5 fall back to Gemini; Gemini may also rate-limit | Semaphore-controlled concurrency; per-provider rate tracking; dynamic concurrency reduction on rate-limit signals |
+| E-11 | LLM response is in a different language | Gemini responds in Hindi to a Hindi input | Parse fails if field names are translated | System prompt explicitly states: "Always respond in English. Field names must match the schema exactly." |
 
 ---
 
@@ -131,7 +131,7 @@ This document catalogs edge cases, failure modes, and boundary conditions across
 | R-6 | User sends empty question | Frontend submits `question: ""` | API returns 422 validation error | Pydantic model: `question: str` with `min_length=1` validator |
 | R-7 | User sends extremely long question | 10,000-character question | Truncate question to reasonable limit before retrieval and synthesis | Max question length: 1,000 chars; return 422 if exceeded |
 | R-8 | Filter combination returns zero results | `category_tier: "exploratory"` + `source: "youtube"` — no YouTube items about exploratory categories | Return: "No results match these filters. Try broadening your search." | Check result count after filtering; return helpful empty-state message |
-| R-9 | Synthesis LLM fails | Both Groq and Gemini error during synthesis | Return 503 with: "Unable to generate answer. Please try again." | Don't return partial/garbage answers; clean error response |
+| R-9 | Synthesis LLM fails | Gemini error during synthesis | Return 503 with: "Unable to generate answer. Please try again." | Don't return partial/garbage answers; clean error response |
 | R-10 | Synthesis takes too long | LLM inference >30 seconds | Frontend shows timeout; user retries | Set HTTP timeout at 60s; show loading state in frontend; suggest retry on timeout |
 
 ---
@@ -190,11 +190,11 @@ This document catalogs edge cases, failure modes, and boundary conditions across
 
 | # | Edge Case | Trigger | Expected Behavior | Mitigation |
 |---|---|---|---|---|
-| L-1 | Groq model deprecated | Groq sunsets `llama-3.3-70b-versatile` | API returns model-not-found error | Config-driven model name; easy to swap; fallback to Gemini continues working |
+| L-1 | Gemini model deprecated | Gemini sunsets `gemini-3.6-flash` | API returns model-not-found error | Config-driven model name; easy to swap; fallback to Gemini continues working |
 | L-2 | Gemini safety filter blocks response | Gemini flags a review as unsafe content | Returns empty or filtered response | Catch safety-filter responses; retry with modified prompt or skip item |
 | L-3 | API key revoked or expired | Key rotation, billing issue, or abuse detection | All LLM calls fail | Clear error logging; pipeline halts with "check API keys" message |
-| L-4 | Token count mismatch | Estimated tokens ≠ actual; input longer than expected | Groq rejects with context-length error | Pre-estimate token count; truncate if approaching limit (131K for Groq, 1M for Gemini) |
-| L-5 | Different JSON structure between providers | Groq and Gemini format JSON responses slightly differently | Parsing works for one but fails for the other | Normalize JSON parsing: strip whitespace, handle both `true`/`True`, use Pydantic's lenient parsing |
+| L-4 | Token count mismatch | Estimated tokens ≠ actual; input longer than expected | Gemini rejects with context-length error | Pre-estimate token count; truncate if approaching limit (131K for Gemini, 1M for Gemini) |
+| L-5 | Different JSON structure between providers | Gemini format JSON responses slightly differently | Parsing works for one but fails for the other | Normalize JSON parsing: strip whitespace, handle both `true`/`True`, use Pydantic's lenient parsing |
 | L-6 | Free tier terms change | Provider reduces free quota or adds restrictions | Pipeline throughput drops or stops | Monitor provider changelogs; architecture supports swapping providers via config |
 
 ---
@@ -210,7 +210,7 @@ This document catalogs edge cases, failure modes, and boundary conditions across
 | 🔴 Critical | I-11, I-16, D-4 | Deduplication: Reddit dual-query across two mirrors, both-mirrors-down graceful failure, re-run safety |
 | 🔴 Critical | I-14, I-15, I-18c | Reddit mirror fallback: Arctic Shift→PullPush and vice versa, response schema normalization |
 | 🟠 High | F-1, F-2, F-3, F-4 | Filter rules: signal-rich short reviews, delivery+category, pure-tech |
-| 🟠 High | L-1, L-5, E-4 | LLM fallback: Groq→Gemini, both-down handling, JSON normalization |
+| 🟠 High | L-1, L-5, E-4 | LLM fallback: Gemini→Gemini, both-down handling, JSON normalization |
 | 🟡 Medium | I-17 | Reddit mirror data staleness: very recent posts may not be indexed |
 | 🟡 Medium | V-6, D-1 | Storage: Railway volume mounted, SQLite integrity |
 | 🟡 Medium | R-1, R-4 | RAG: off-topic handling, contradictory evidence presentation |

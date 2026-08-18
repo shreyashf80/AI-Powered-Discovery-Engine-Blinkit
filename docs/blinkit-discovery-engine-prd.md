@@ -119,7 +119,7 @@ Given free-only access, expect **Tier 2 sources** to be the thinnest and least r
      [Chat UI on Vercel]  +  [Auto-generated insight summary vs. the 8 questions]
 
 *Note: Backend (pipeline + RAG) deployed on Railway. Frontend (Chat UI) deployed on Vercel.*
-*LLMs: Groq (primary) with Gemini (fallback). Items tagged `relevant: false` are purged after counting.*
+*LLMs: Gemini. Items tagged `relevant: false` are purged after counting.*
 ```
 
 ### 7a. Relevance Filter (cost & space control)
@@ -142,16 +142,16 @@ No separate classifier. The same Section 5 extraction prompt/model adds one more
 
 The system is split across two free-tier platforms:
 
-- **Railway (backend):** FastAPI + full ingestion pipeline + ChromaDB + SQLite, all on a persistent volume. Handles scraping, extraction (Groq/Gemini), embedding, and RAG synthesis.
+- **Railway (backend):** FastAPI + full ingestion pipeline + ChromaDB + SQLite, all on a persistent volume. Handles scraping, extraction (Gemini), embedding, and RAG synthesis.
 - **Vercel (frontend):** Next.js application consuming the Railway API over HTTPS.
 
-**LLM Strategy:** Groq is the primary LLM (fast inference, generous free tier). Gemini is the automatic fallback when Groq hits rate limits or errors. Both are used interchangeably for extraction and RAG synthesis.
+**LLM Strategy:** Gemini is the LLM used for extraction and RAG synthesis.
 
 **Considerations for deployed scraping:**
 1. **IP Blocking Risk:** Datacenter IPs are more frequently blocked. Source connectors need robust retry/backoff logic.
 2. **Resource Usage:** Pipeline runs as a background task triggered via an authenticated admin endpoint (`/api/admin/ingest`).
 
-**Suggested stack:** Python + FastAPI backend (Railway), Groq + Gemini APIs for extraction and RAG synthesis, Chroma as the vector store (on a Railway volume), Next.js frontend on Vercel.
+**Suggested stack:** Python + FastAPI backend (Railway), Gemini API for extraction and RAG synthesis, Chroma as the vector store (on a Railway volume), Next.js frontend on Vercel.
 
 ---
 
@@ -181,7 +181,7 @@ The system is split across two free-tier platforms:
 
 - **Zero paid-API dependency:** every ingestion connector must run on free/unauthenticated access; if a source can't reach meaningful volume this way, that's a documented gap, not a reason to add a paid API
 - **Legal/ToS disclosure:** scraping App Store, Play Store, and forum pages sits in a ToS gray area for most of these platforms. This build is for personal research/case-study purposes only, not commercial redistribution — this should be stated explicitly wherever the output is shared, rather than left implicit
-- **Cost awareness:** both Groq and Gemini are used on free tiers; batch extraction should respect rate limits and use the fallback provider to avoid pipeline stalls
+- **Cost awareness:** Gemini are used on free tiers; batch extraction should respect rate limits and use the fallback provider to avoid pipeline stalls
 - **Data provenance:** every stored item retains source, timestamp, and original text — no summarization at ingestion time
 - **Privacy:** no PII beyond what's already public in the review/comment; no attempt to de-anonymize users
 - **Transparency of coverage:** since volume will vary a lot by source (Section 6), the system should report per-source counts alongside any insight, so a thin source doesn't get silently treated as equally strong evidence as a deep one
