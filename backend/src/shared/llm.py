@@ -21,7 +21,7 @@ class LLMClient:
         
         # Parse comma-separated Gemini API keys and create a client pool
         self.gemini_clients: List[genai.Client] = []
-        raw_keys = config.GEMINI_API_KEYS
+        raw_keys = config.GEMINI_API_KEYS or config.GEMINI_API_KEY
         if raw_keys:
             keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
             for key in keys:

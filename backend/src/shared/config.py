@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     DATA_DIR: str = "data"
     
     GEMINI_API_KEYS: str = ""  # Comma-separated list of Gemini API keys for rotation
+    GEMINI_API_KEY: str = ""   # Fallback if plural is not used
     ADMIN_SECRET: str = "super_secret_admin_token"
     YOUTUBE_API_KEY: str = ""
     SERPAPI_KEY: str = ""
