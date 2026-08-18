@@ -36,7 +36,7 @@ class LLMClient:
         
         def run_gemini():
             response = client.models.generate_content(
-                model='gemini-2.0-flash',
+                model='gemini-3.6-flash',
                 contents=user,
                 config=genai.types.GenerateContentConfig(
                     system_instruction=system,
