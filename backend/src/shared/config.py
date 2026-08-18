@@ -4,7 +4,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     DATA_DIR: str = "data"
     
-    GROQ_API_KEY: str = ""
     GEMINI_API_KEYS: str = ""  # Comma-separated list of Gemini API keys for rotation
     ADMIN_SECRET: str = "super_secret_admin_token"
     YOUTUBE_API_KEY: str = ""

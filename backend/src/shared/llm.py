@@ -2,10 +2,7 @@ import logging
 import asyncio
 import os
 from typing import Optional, List
-from groq import AsyncGroq
-from groq import RateLimitError as GroqRateLimitError
-from groq import InternalServerError as GroqServerError
-from groq import APIConnectionError as GroqConnectionError
+
 from google import genai
 from pydantic import BaseModel
 
@@ -21,9 +18,6 @@ class LLMResponse(BaseModel):
 
 class LLMClient:
     def __init__(self):
-        self.groq_client = None
-        if config.GROQ_API_KEY:
-            self.groq_client = AsyncGroq(api_key=config.GROQ_API_KEY, max_retries=0)
         
         # Parse comma-separated Gemini API keys and create a client pool
         self.gemini_clients: List[genai.Client] = []
@@ -36,23 +30,6 @@ class LLMClient:
 
         # Round-robin index
         self._gemini_idx = 0
-
-    async def _groq_call(self, system: str, user: str) -> LLMResponse:
-        if not self.groq_client:
-            raise ValueError("Groq API key not configured")
-        
-        response = await self.groq_client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user}
-            ],
-            model="llama-3.3-70b-versatile",
-            temperature=0.0,
-            response_format={"type": "json_object"}
-        )
-        content = response.choices[0].message.content
-        tokens = response.usage.total_tokens if response.usage else 0
-        return LLMResponse(content=content, llm_used="groq", tokens_used=tokens)
 
     async def _gemini_call_with_client(self, client: genai.Client, system: str, user: str) -> LLMResponse:
         loop = asyncio.get_event_loop()
@@ -101,16 +78,12 @@ class LLMClient:
         raise last_error  # type: ignore
 
     async def complete(self, system: str, user: str) -> LLMResponse:
-        """Tries all Gemini keys first (with rotation), falls back to Groq on failure."""
+        """Tries all Gemini keys first (with rotation)."""
         try:
             return await self._gemini_call(system, user)
         except Exception as e:
-            logger.warning(f"All Gemini keys failed: {e}. Falling back to Groq.")
-            try:
-                return await self._groq_call(system, user)
-            except Exception as groq_e:
-                logger.error(f"Both Gemini and Groq failed. Gemini error: {e}, Groq error: {groq_e}")
-                raise
+            logger.error(f"All Gemini keys failed: {e}.")
+            raise
 
 # Singleton instance
 llm_client = LLMClient()
